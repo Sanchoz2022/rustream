@@ -123,6 +123,19 @@ export const addToPlaylist = (playlistId, songId) => {
   }).then((r) => r.json());
 };
 
+export const removeFromPlaylist = (playlistId, songIndex) => {
+  const params = new URLSearchParams({
+    v: API_VERSION,
+    c: CLIENT,
+    f: 'json',
+    playlistId,
+    songIndexToRemove: String(songIndex),
+  });
+  return fetch(`/rest/updatePlaylist.view?${params.toString()}`, {
+    credentials: 'same-origin',
+  }).then((r) => r.json());
+};
+
 export const deletePlaylist = (id) => api('deletePlaylist', { id });
 
 export async function getStarred() {

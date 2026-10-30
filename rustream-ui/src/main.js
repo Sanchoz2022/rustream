@@ -117,7 +117,7 @@ root.innerHTML = `
         <img id="pb-cover-img" alt="" />
         <span class="pb-cover-overlay">${icon('play')}</span>
       </button>
-      <div class="pb-meta">
+      <div class="pb-meta" data-action="nowplaying" title="Открыть плеер">
         <div class="pb-title" id="pb-title">Ничего не играет</div>
         <div class="pb-artist" id="pb-artist">Выберите трек</div>
       </div>
@@ -159,6 +159,14 @@ root.innerHTML = `
     </div>
   </footer>
 
+  <nav class="tabbar" aria-label="Основное меню">
+    <a href="#/home" data-tab="home" class="tab-item"><span class="tab-icon">${icon('home')}</span><span class="tab-label">Главная</span></a>
+    <a href="#/live" data-tab="live" class="tab-item"><span class="tab-icon">${icon('radio')}</span><span class="tab-label">Live</span></a>
+    <a href="#/ytm" data-tab="ytm" class="tab-item"><span class="tab-icon">${icon('ytm')}</span><span class="tab-label">YouTube</span></a>
+    <a href="#/library" data-tab="library" class="tab-item"><span class="tab-icon">${icon('album')}</span><span class="tab-label">Медиатека</span></a>
+    <a href="#/profile" data-tab="profile" class="tab-item"><span class="tab-icon">${icon('person')}</span><span class="tab-label">Профиль</span></a>
+  </nav>
+
   <div class="np" id="np" hidden>
     <div class="np-backdrop" data-action="close-np"></div>
     <div class="np-sheet" role="dialog" aria-modal="true" aria-label="Плеер">
@@ -175,6 +183,21 @@ root.innerHTML = `
       <div class="np-body">
         <div class="np-side" id="np-side"></div>
         <div class="np-panel" id="np-panel"></div>
+      </div>
+      <div class="np-transport">
+        <div class="np-seek-line">
+          <span class="time" id="np-cur-time">0:00</span>
+          <div class="np-seek-bar">
+            <i class="np-seek-buffer" id="np-seek-buffer"></i>
+            <i class="np-seek-fill" id="np-seek-fill"></i>
+            <input id="np-seek" type="range" min="0" max="100" step="0.1" value="0" aria-label="Позиция" />
+          </div>
+          <span class="time" id="np-total-time">0:00</span>
+        </div>
+        <div class="np-volume">
+          <span class="icon" id="np-volume-icon">${icon('volumeUp')}</span>
+          <input id="np-volume" type="range" min="0" max="100" value="${player.volumePercent}" aria-label="Громкость" />
+        </div>
       </div>
     </div>
   </div>
@@ -365,7 +388,7 @@ function plural(n, one, few, many) {
   return many;
 }
 
-function trackRow(track, index, { showAlbum = true, showCover = false } = {}) {
+function trackRow(track, index, { showAlbum = true, showCover = false, playlistId = null } = {}) {
   const isPlaying = player.track?.id === track.id;
   const liked = state.favorites.has(track.id);
   const number = track.track && track.track > 0 ? track.track : index + 1;
@@ -383,7 +406,11 @@ function trackRow(track, index, { showAlbum = true, showCover = false } = {}) {
     <span class="track-duration">${formatTime(track.duration)}</span>
     <button class="icon-btn row-btn like ${liked ? 'active' : ''}" data-action="like" data-id="${track.id}" title="В избранное">${icon(liked ? 'heart' : 'heartOutline')}</button>
     <button class="icon-btn row-btn dislike ${state.dislikes.has(track.id) ? 'active' : ''}" data-action="dislike" data-id="${track.id}" title="Не нравится">${icon('thumbDown')}</button>
-    <button class="icon-btn row-btn" data-action="add-to-playlist" data-id="${track.id}" title="Добавить в плейлист">${icon('add')}</button>
+    ${
+      playlistId
+        ? `<button class="icon-btn row-btn" data-action="remove-from-playlist" data-playlist="${playlistId}" data-index="${index}" title="Убрать из плейлиста">${icon('delete')}</button>`
+        : `<button class="icon-btn row-btn" data-action="add-to-playlist" data-id="${track.id}" title="Добавить в плейлист">${icon('add')}</button>`
+    }
   </div>`;
 }
 
@@ -405,16 +432,23 @@ function parseRoute() {
   return { parts, params: new URLSearchParams(queryString) };
 }
 
+// Detail pages highlight the section they belong to.
+const NAV_ALIAS = { artist: 'artists', album: 'albums', playlist: 'playlists' };
+// Everything the mobile "Медиатека" tab covers.
+const LIBRARY_SECTIONS = new Set(['artists', 'albums', 'tracks', 'playlists', 'favorites', 'stats']);
+
 function setActiveNav(section) {
+  const active = NAV_ALIAS[section] || section;
   $$('.nav-item').forEach((item) => {
-    const target = item.dataset.nav;
-    const active =
-      target === section ||
-      (section === 'artist' && target === 'artists') ||
-      (section === 'album' && target === 'albums') ||
-      (section === 'playlist' && target === 'playlists') ||
-      (section === 'search' && target === 'home');
-    item.classList.toggle('active', active);
+    item.classList.toggle('active', item.dataset.nav === active);
+  });
+  $$('.tab-item').forEach((item) => {
+    const tab = item.dataset.tab;
+    const on =
+      tab === active ||
+      (tab === 'library' && (active === 'library' || LIBRARY_SECTIONS.has(active))) ||
+      (tab === 'home' && active === 'search');
+    item.classList.toggle('active', on);
   });
 }
 
@@ -446,6 +480,7 @@ async function route() {
     else if (section === 'playlist') await renderPlaylist(seq, parts[1]);
     else if (section === 'favorites') await renderFavorites(seq);
     else if (section === 'search') await renderSearch(seq, params.get('q') || '');
+    else if (section === 'library') await renderLibrary(seq);
     else if (section === 'profile') await renderProfile(seq);
     else if (section === 'ytm') await renderYtm(seq);
     else await renderHome(seq);
@@ -956,7 +991,7 @@ async function renderPlaylist(seq, id) {
         </div>
       </section>
       <section class="section">
-        ${trackList(entries, { showCover: true })}
+        ${trackList(entries, { showCover: true, playlistId: playlist.id })}
       </section>
     </div>`;
 }
@@ -1197,6 +1232,7 @@ function showModal({ title, body, onMount }) {
         <div class="modal-body">${body}</div>
       </div>
     </div>`;
+  document.body.classList.add('modal-open');
   const modal = $('.modal', rootEl);
   rootEl.querySelector('.modal-backdrop').addEventListener('click', (event) => {
     if (event.target.dataset.modalAction === 'close') closeModal();
@@ -1206,6 +1242,7 @@ function showModal({ title, body, onMount }) {
 
 function closeModal() {
   $('#modal-root').innerHTML = '';
+  document.body.classList.remove('modal-open');
 }
 
 // ---------------------------------------------------------------------------
@@ -1217,7 +1254,10 @@ function openNowPlaying(tab = 'lyrics') {
   state.npTab = tab;
   const np = $('#np');
   np.hidden = false;
+  // Two ways in: an animation frame for the slide-up transition, and a
+  // timeout for browsers that throttle rAF in background tabs.
   requestAnimationFrame(() => np.classList.add('open'));
+  setTimeout(() => np.classList.add('open'), 80);
   renderNowPlaying();
 }
 
@@ -1259,6 +1299,7 @@ function renderNowPlaying() {
         <button class="icon-btn like ${track && state.favorites.has(track.id) ? 'active' : ''}" data-action="like-current">${icon(track && state.favorites.has(track.id) ? 'heart' : 'heartOutline')}</button>
         <button class="icon-btn dislike ${track && state.dislikes.has(track.id) ? 'active' : ''}" data-action="dislike-current" title="Не нравится">${icon('thumbDown')}</button>
         <button class="btn glass" data-action="toggle">${icon(player.paused ? 'play' : 'pause')} ${player.paused ? 'Играть' : 'Пауза'}</button>
+        <button class="icon-btn" data-action="add-to-playlist" data-id="${track?.id || ''}" ${track ? '' : 'disabled'} title="В плейлист">${icon('add')}</button>
         <button class="icon-btn" data-action="jump-album" ${track?.albumId ? '' : 'disabled'}>${icon('album')}</button>
       </div>
     </div>`;
@@ -1459,6 +1500,14 @@ function updateTimeUi() {
   $('#total-time').textContent = formatTime(duration);
   $('#seek').value = String(percent);
   $('#seek-fill').style.width = `${percent}%`;
+  // The now-playing sheet has its own, larger seek control for touch screens.
+  const npSeek = $('#np-seek');
+  if (npSeek) {
+    npSeek.value = String(percent);
+    $('#np-seek-fill').style.width = `${percent}%`;
+    $('#np-cur-time').textContent = formatTime(current);
+    $('#np-total-time').textContent = formatTime(duration);
+  }
   updateBufferUi();
   highlightLyrics();
 }
@@ -1466,6 +1515,8 @@ function updateTimeUi() {
 function updateBufferUi() {
   const buffer = player.buffered;
   $('#seek-buffer').style.width = `${buffer.percent}%`;
+  const npBufferFill = $('#np-seek-buffer');
+  if (npBufferFill) npBufferFill.style.width = `${buffer.percent}%`;
 
   const npBuffer = $('#np-buffer');
   if (npBuffer) {
@@ -1509,6 +1560,12 @@ function updateVolumeUi() {
   const name =
     player.volumePercent === 0 ? 'volumeOff' : player.volumePercent < 50 ? 'volumeDown' : 'volumeUp';
   $('#volume-btn').innerHTML = icon(name);
+  const npVolume = $('#np-volume');
+  if (npVolume) {
+    npVolume.value = String(player.volumePercent);
+    const npIcon = $('#np-volume-icon');
+    if (npIcon) npIcon.innerHTML = icon(name);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2063,6 +2120,54 @@ function invitesHtml(invites) {
     </section>`;
 }
 
+// ---------------------------------------------------------------------------
+// Library hub (mobile tab "Медиатека")
+// ---------------------------------------------------------------------------
+
+async function renderLibrary(seq) {
+  showLoading();
+  const [stats, playlists] = await Promise.all([
+    loadStats().catch(() => ({})),
+    api.getPlaylists().catch(() => []),
+  ]);
+  if (seq !== state.renderSeq) return;
+  cache.playlists = playlists;
+
+  const tiles = [
+    { href: '#/artists', icon: 'person', title: 'Артисты', sub: `${stats.artists || 0} в библиотеке` },
+    { href: '#/albums', icon: 'album', title: 'Альбомы', sub: `${stats.albums || 0} в библиотеке` },
+    { href: '#/tracks', icon: 'music', title: 'Треки', sub: `${stats.tracks || 0} в библиотеке` },
+    { href: '#/playlists', icon: 'playlist', title: 'Плейлисты', sub: `${playlists.length} ${plural(playlists.length, 'подборка', 'подборки', 'подборок')}` },
+    { href: '#/favorites', icon: 'heart', title: 'Избранное', sub: 'Треки, которым вы поставили лайк' },
+    { href: '#/stats', icon: 'chart', title: 'Статистика', sub: 'Часы, артисты и история' },
+  ];
+
+  $('#view').innerHTML = `
+    <div class="page library-page">
+      <header class="page-head">
+        <div>
+          <span class="eyebrow">Коллекция</span>
+          <h1>Медиатека</h1>
+          <p class="muted">${stats.tracks || 0} ${plural(stats.tracks || 0, 'трек', 'трека', 'треков')} · ${formatBytes(stats.sizeBytes || 0)}</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn glass" data-action="shuffle-library">${icon('shuffle')} Перемешать всё</button>
+        </div>
+      </header>
+      <div class="library-grid">
+        ${tiles
+          .map(
+            (tile) => `<a class="library-tile" href="${tile.href}">
+              <span class="tile-icon">${icon(tile.icon)}</span>
+              <span class="tile-main"><strong>${tile.title}</strong><small>${esc(tile.sub)}</small></span>
+              <span class="tile-arrow">${icon('next')}</span>
+            </a>`,
+          )
+          .join('')}
+      </div>
+    </div>`;
+}
+
 async function renderProfile(seq) {
   showLoading();
   const isAdmin = !!state.me?.isAdmin;
@@ -2150,8 +2255,12 @@ async function renderProfile(seq) {
     }
   });
 
-  $('#theme-custom')?.addEventListener('input', (event) => saveTheme(event.target.value));
-  $('#theme-custom')?.addEventListener('change', () => route());
+  // Preview while the picker moves, persist once it is released.
+  $('#theme-custom')?.addEventListener('input', (event) => applyTheme(event.target.value));
+  $('#theme-custom')?.addEventListener('change', async (event) => {
+    await saveTheme(event.target.value);
+    route();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -2397,6 +2506,17 @@ document.addEventListener('click', async (event) => {
     await openAddToPlaylist(actionEl.dataset.id);
     return;
   }
+  if (action === 'remove-from-playlist') {
+    event.stopPropagation();
+    try {
+      await api.removeFromPlaylist(actionEl.dataset.playlist, Number(actionEl.dataset.index));
+      toast('Трек убран из плейлиста');
+      route();
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+    return;
+  }
   if (action === 'resume') {
     if (!player.track) {
       if (state.currentTracks.length) await player.playTracks(state.currentTracks, 0);
@@ -2474,6 +2594,16 @@ $('#np').addEventListener('click', (event) => {
 });
 
 $('#np').addEventListener('input', (event) => {
+  if (event.target.id === 'np-seek') {
+    player.seekTo(Number(event.target.value));
+    updateTimeUi();
+    return;
+  }
+  if (event.target.id === 'np-volume') {
+    player.setVolume(Number(event.target.value));
+    updateVolumeUi();
+    return;
+  }
   const slider = event.target.closest('[data-eq-band]');
   if (slider) {
     const index = Number(slider.dataset.eqBand);
@@ -2521,7 +2651,8 @@ document.addEventListener('keydown', (event) => {
     $('#search-input').focus();
   }
   if (event.key === 'Escape') {
-    if (!$('#modal-root').innerHTML) closeNowPlaying();
+    if ($('#modal-root').innerHTML) closeModal();
+    else closeNowPlaying();
   }
 });
 
@@ -2540,6 +2671,8 @@ searchInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     const query = searchInput.value.trim();
     if (!query) return;
+    // Close the on-screen keyboard before the results replace the view.
+    searchInput.blur();
     const target = `#/search?q=${encodeURIComponent(query)}`;
     if (location.hash === target) route();
     else location.hash = target;

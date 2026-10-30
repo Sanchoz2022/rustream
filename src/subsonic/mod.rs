@@ -1994,13 +1994,36 @@ async fn update_playlist(
     }
 
     for index in remove_indexes {
-        sqlx::query("DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?")
-            .bind(&playlist_id)
-            .bind(index)
-            .execute(&db)
-            .await
-            .ok();
+        // `songIndexToRemove` is the ordinal in the playlist, not the stored
+        // position: positions are renumbered below, so both stay in sync.
+        sqlx::query(
+            "DELETE FROM playlist_tracks WHERE rowid = (
+                 SELECT rowid FROM playlist_tracks
+                 WHERE playlist_id = ? ORDER BY position LIMIT 1 OFFSET ?
+             )",
+        )
+        .bind(&playlist_id)
+        .bind(index.max(0))
+        .execute(&db)
+        .await
+        .ok();
     }
+
+    // Close the gaps so the next removal by index still means the same thing.
+    sqlx::query(
+        "WITH ordered AS (
+             SELECT rowid AS rid, ROW_NUMBER() OVER (ORDER BY position) - 1 AS pos
+             FROM playlist_tracks WHERE playlist_id = ?
+         )
+         UPDATE playlist_tracks
+         SET position = (SELECT pos FROM ordered WHERE ordered.rid = playlist_tracks.rowid)
+         WHERE playlist_id = ?",
+    )
+    .bind(&playlist_id)
+    .bind(&playlist_id)
+    .execute(&db)
+    .await
+    .ok();
 
     sqlx::query("UPDATE playlists SET changed_at = ? WHERE playlist_id = ?")
         .bind(chrono::Utc::now().timestamp())

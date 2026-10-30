@@ -4038,3 +4038,834 @@ body[data-theme='custom'] {
     width: 100%;
   }
 }
+
+/* ==================================================================== */
+/* Mobile shell: bottom tabs, compact player, touch-sized controls      */
+/* ==================================================================== */
+
+/* Desktop keeps the sidebar; the tab bar only appears on narrow screens. */
+.tabbar {
+  display: none;
+}
+
+/* Library hub tiles (opened from the "Медиатека" tab) */
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.library-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--glass-border);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+
+.library-tile:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(199, 166, 255, 0.3);
+}
+
+.library-tile .tile-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border-radius: 14px;
+  color: var(--primary);
+  background: rgba(199, 166, 255, 0.14);
+}
+
+.library-tile .tile-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.library-tile .tile-main strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.library-tile .tile-main small {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}
+
+.library-tile .tile-arrow {
+  color: var(--on-surface-variant);
+}
+
+.library-tile .tile-arrow .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Transport inside the now-playing sheet */
+.np-transport {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 34px 18px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.np-seek-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.np-seek-bar {
+  position: relative;
+  flex: 1;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.np-seek-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.np-seek-bar i {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.np-seek-buffer {
+  width: 0;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.np-seek-fill {
+  width: 0;
+  background: linear-gradient(90deg, var(--primary), #e6d6ff);
+}
+
+.np-seek-bar input[type='range'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.np-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--on-surface-variant);
+}
+
+.np-volume .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.np-volume input[type='range'] {
+  flex: 1;
+  max-width: 220px;
+  accent-color: var(--primary);
+}
+
+body.modal-open #view {
+  overflow: hidden;
+}
+
+button,
+a,
+input[type='range'] {
+  touch-action: manipulation;
+}
+
+@media (max-width: 940px) {
+  :root {
+    --topbar-h: 58px;
+    --player-h: 62px;
+    --tabbar-h: 56px;
+  }
+
+  #app {
+    height: 100dvh;
+  }
+
+  /* ---- Top bar: brand, search, avatar ---- */
+  .topbar {
+    height: calc(var(--topbar-h) + env(safe-area-inset-top));
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: env(safe-area-inset-top) 10px 0;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+
+  .brand-mark .icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .searchbox {
+    height: 40px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .searchbox input {
+    font-size: 14px;
+  }
+
+  #rescan-btn,
+  .now-playing-pill {
+    display: none;
+  }
+
+  .user-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .user-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .brand {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+  }
+
+  .text-link {
+    min-height: 40px;
+    padding: 8px 0;
+  }
+
+  /* ---- Content ---- */
+  .shell {
+    flex-direction: column;
+    padding: 0;
+    gap: 0;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .view {
+    padding-bottom: 0;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .page {
+    padding: 16px 14px 28px;
+  }
+
+  /* ---- Bottom tabs ---- */
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    flex: 0 0 auto;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--glass-strong);
+    border-top: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    z-index: 45;
+  }
+
+  .tab-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 44px;
+    color: var(--on-surface-variant);
+    font-size: 10px;
+    font-weight: 500;
+    transition: color 0.18s;
+  }
+
+  .tab-item .tab-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 28px;
+    border-radius: 10px;
+    transition: background 0.18s, color 0.18s;
+  }
+
+  .tab-item .tab-icon .icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .tab-item.active {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .tab-item.active .tab-icon {
+    background: rgba(199, 166, 255, 0.22);
+    color: var(--primary);
+    box-shadow: inset 0 0 0 1px rgba(199, 166, 255, 0.24);
+  }
+
+  .tab-label {
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* ---- Mini player ---- */
+  .playerbar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: var(--player-h);
+    flex: 0 0 var(--player-h);
+    padding: 0 8px 0 10px;
+    grid-template-columns: none;
+  }
+
+  .pb-left {
+    flex: 1 1 auto;
+    gap: 10px;
+  }
+
+  .pb-cover {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    border-radius: 10px;
+  }
+
+  .pb-meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pb-title {
+    max-width: none;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .pb-artist {
+    display: block;
+    max-width: none;
+    font-size: 11px;
+    margin-top: 1px;
+  }
+
+  .pb-left .like-btn,
+  .pb-left .dislike-btn,
+  .pb-right {
+    display: none;
+  }
+
+  .pb-center {
+    flex: 0 0 auto;
+  }
+
+  .pb-controls {
+    gap: 0;
+  }
+
+  .pb-controls #shuffle-btn,
+  .pb-controls #repeat-btn {
+    display: none;
+  }
+
+  .pb-controls .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .play-btn {
+    width: 46px;
+    height: 46px;
+    margin: 0;
+  }
+
+  /* Progress is a thin line on top of the bar; the big one lives in the
+     now-playing sheet. */
+  .pb-seek {
+    position: absolute;
+    inset: 0 0 auto 0;
+    width: auto;
+    gap: 0;
+  }
+
+  .pb-seek .time {
+    display: none;
+  }
+
+  .seek {
+    height: 14px;
+  }
+
+  .seek::before,
+  .seek-buffer,
+  .seek-fill {
+    height: 2px;
+    border-radius: 0;
+  }
+
+  .seek input[type='range'] {
+    height: 14px;
+  }
+
+  .seek:hover .seek-fill::after {
+    display: none;
+  }
+
+  /* ---- Now-playing sheet ---- */
+  .np-sheet {
+    height: 92dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .np-head {
+    gap: 6px;
+    padding: 8px 10px 6px;
+  }
+
+  .np-tabs {
+    flex: 1;
+    justify-content: center;
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .np-tab {
+    flex: 1;
+    justify-content: center;
+    gap: 5px;
+    height: 40px;
+    padding: 0 4px;
+  }
+
+  .np-tab span {
+    display: inline;
+    font-size: 11.5px;
+  }
+
+  .np-head-spacer {
+    display: none;
+  }
+
+  .np-body {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 6px 14px 10px;
+    overflow-y: auto;
+  }
+
+  /* Phone: cover on top, everything centred, panel scrolls below. */
+  .np-side {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .np-cover {
+    width: min(56vw, 230px);
+    height: auto;
+    aspect-ratio: 1;
+    flex: 0 0 auto;
+    border-radius: var(--radius-lg);
+  }
+
+  .np-meta {
+    padding: 0;
+    min-width: 0;
+  }
+
+  .np-meta h2 {
+    font-size: 19px;
+  }
+
+  .np-artist {
+    font-size: 13px;
+    margin: 4px 0 0;
+  }
+
+  .np-chips {
+    display: none;
+  }
+
+  .np-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .np-actions .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .np-panel {
+    overflow: visible;
+  }
+
+  .np-transport {
+    padding: 8px 14px 12px;
+  }
+
+  .np-transport .time {
+    min-width: 34px;
+  }
+
+  .lyrics {
+    padding-bottom: 24px;
+  }
+
+  .np-panel {
+    min-height: 160px;
+  }
+
+  /* ---- Modals as bottom sheets ---- */
+  .modal-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .auth-screen {
+    padding: 16px;
+    align-items: center;
+  }
+
+  .auth-card {
+    padding: 24px 20px;
+  }
+}
+
+@media (max-width: 620px) {
+  .page-head {
+    margin-bottom: 16px;
+  }
+
+  .home-head h1,
+  .page-head h1 {
+    font-size: 26px;
+  }
+
+  /* Two covers per row on any phone */
+  .grid.cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .card {
+    padding: 8px;
+  }
+
+  .card-body {
+    padding: 9px 3px 2px;
+  }
+
+  .card-title {
+    font-size: 13px;
+  }
+
+  .card-sub {
+    font-size: 11px;
+  }
+
+  .section-head h2 {
+    font-size: 19px;
+  }
+
+  .library-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .library-tile {
+    padding: 12px;
+  }
+
+  .track-row {
+    grid-template-columns: 22px minmax(0, 1fr) 34px 34px;
+    gap: 6px;
+    padding: 8px 6px;
+    min-height: 56px;
+  }
+
+  .track-row:has(.track-cover) {
+    grid-template-columns: 22px 36px minmax(0, 1fr) 34px 34px;
+  }
+
+  .track-row .row-btn[data-action='dislike'],
+  .track-duration,
+  .track-badge {
+    display: none;
+  }
+
+  /* Older rules hid playlist actions on phones; keep them reachable. */
+  .track-row .row-btn[data-action='add-to-playlist'] {
+    display: inline-flex;
+  }
+
+  .row-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Home actions: primary on its own row, two secondary buttons under it. */
+  .home-head .head-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .home-head .head-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .home-head .head-actions .btn:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .section-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+
+  .section-head > .status-chip,
+  .section-head > .muted.small {
+    margin-left: auto;
+  }
+
+  .section-head .text-link {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .section-head h2 {
+    font-size: 18px;
+  }
+
+  .collection-head {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .collection-art {
+    width: 104px;
+    height: 104px;
+  }
+
+  .collection-info h1 {
+    font-size: 24px;
+  }
+
+  .hero-actions .btn {
+    height: 40px;
+    padding: 0 12px;
+  }
+
+  .np-side {
+    align-items: center;
+  }
+
+  .np-cover {
+    width: min(52vw, 200px);
+    height: auto;
+    aspect-ratio: 1;
+    flex: 0 0 auto;
+  }
+
+  .np-meta h2 {
+    font-size: 17px;
+  }
+
+  .np-tab {
+    height: 36px;
+  }
+
+  .np-tab .icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 400px) {
+  .tab-item {
+    font-size: 9px;
+  }
+
+  .tab-item .tab-icon {
+    width: 44px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .searchbox {
+    padding: 0 10px;
+  }
+
+  .searchbox .icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .page {
+    padding: 14px 10px 24px;
+  }
+
+  .home-head h1,
+  .page-head h1 {
+    font-size: 23px;
+  }
+
+  .grid.cards {
+    gap: 8px;
+  }
+
+  .np-cover {
+    width: min(58vw, 180px);
+  }
+}
+
+@media (max-width: 360px) {
+  .np-tab span {
+    display: none;
+  }
+}
+
+@media (max-width: 940px) and (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --player-h: 54px;
+    --tabbar-h: 48px;
+  }
+
+  .np-sheet {
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .np-body {
+    grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  }
+}
+
+/* Hover-only affordances are useless on touch screens. */
+@media (hover: none) {
+  .track-row .row-btn,
+  .card .card-play {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 941px) {
+  /* The connect button should not stretch across the whole card. */
+  .ytm-connect .btn {
+    align-self: flex-start;
+  }
+}
+
+/* A sidebar that scrolls on short screens should not show a scrollbar. */
+.nav {
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* Short viewports (landscape phones, keyboard open): let the auth card scroll. */
+@media (max-height: 680px) {
+  .auth-screen {
+    align-items: start;
+    overflow-y: auto;
+    padding-top: max(16px, env(safe-area-inset-top));
+  }
+}
+
+/* Short desktop windows: fit the whole sidebar without scrolling. */
+@media (min-width: 941px) and (max-height: 820px) {
+  .nav {
+    gap: 4px;
+    padding: 10px 8px;
+  }
+
+  .nav-item {
+    min-height: 52px;
+    gap: 3px;
+  }
+
+  .nav-label {
+    font-size: 10px;
+  }
+
+  .nav-hint {
+    display: none;
+  }
+}
+
+.pb-meta {
+  cursor: pointer;
+}
+
+.pb-meta:hover .pb-title {
+  color: var(--primary);
+}
