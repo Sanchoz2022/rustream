@@ -1,0 +1,12 @@
+target/
+.git/
+.serena/
+static/
+rustream-ui/node_modules/
+rustream-ui/dist/
+deploy/.env
+*.db
+*.db-shm
+*.db-wal
+config.toml
+cache/

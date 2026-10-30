@@ -1,0 +1,15 @@
+services:
+  rustream:
+    build: .
+    image: rustream:latest
+    container_name: rustream
+    restart: unless-stopped
+    ports:
+      - "4533:4533"
+    volumes:
+      # Music library, read-only
+      - ${MUSIC_DIR:-./music}:/music:ro
+      # SQLite database, config.toml and YouTube Music cache
+      - ./data:/data
+    environment:
+      - RUST_LOG=rustream=info

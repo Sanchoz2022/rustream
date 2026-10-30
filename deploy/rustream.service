@@ -1,0 +1,19 @@
+[Unit]
+Description=Rustream Music Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rustream
+ExecStart=/opt/rustream/rustream
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Переменные окружения
+Environment="RUST_LOG=rustream=info"
+
+[Install]
+WantedBy=multi-user.target
