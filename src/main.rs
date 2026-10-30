@@ -58,6 +58,13 @@ async fn main() -> Result<()> {
     db::run_migrations(&db).await?;
     auth::ensure_admin(&db).await?;
 
+    if let Some(proxy) = config
+        .ytm_proxy
+        .as_deref()
+        .filter(|proxy| !proxy.is_empty())
+    {
+        info!("YouTube Music traffic goes through {proxy}");
+    }
     let ytm = ytm::YtmState::new(config.ytm_proxy.as_deref())?;
     if config.ytm_enabled {
         if let Err(error) = tokio::fs::create_dir_all(&config.ytm_cache_dir).await {

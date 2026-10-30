@@ -67,21 +67,40 @@ ssh pve 'pct exec 104 -- /opt/rustream/bin/yt-dlp --version'
 
 ## Если YouTube недоступен с сервера
 
-Провайдеры и корпоративные сети часто блокируют `music.youtube.com`. Проверка:
+Провайдеры часто блокируют `music.youtube.com`. Проверка:
 
 ```bash
 ssh pve "pct exec 104 -- curl -s -o /dev/null -w '%{http_code}\n' --max-time 8 https://music.youtube.com"
 ```
 
-Если код не `200`, укажите прокси в `config.toml` — он используется и для API
-YouTube, и для `yt-dlp`:
+Если код не `200`, поднимите локальный прокси `mihomo` (Clash Meta). В контейнере
+он развёрнут как `mihomo.service`: слушает только `127.0.0.1:7890`, наружу
+пускает лишь трафик YouTube, остальное — напрямую.
 
-```toml
-ytm_proxy = "socks5h://192.168.10.5:1080"   # или http://host:3128
+Установка/обновление:
+
+```bash
+# 1. Конфиг из своего VLESS-ключа (образец: deploy/mihomo.yaml.example)
+scp my-mihomo.yaml pve:/tmp/mihomo.yaml
+ssh pve "pct push 104 /tmp/mihomo.yaml /opt/mihomo/config.yaml && rm -f /tmp/mihomo.yaml"
+
+# 2. Бинарник и unit (идемпотентно)
+./deploy/setup-mihomo.sh   # или: ssh pve "pct exec 104 -- sh -s" < deploy/setup-mihomo.sh
+
+# 3. Указать прокси rustream
+ssh pve "pct exec 104 -- sh -c 'grep -q ^ytm_proxy /opt/rustream/config.toml || echo \"ytm_proxy = \\\"http://127.0.0.1:7890\\\"\" >> /opt/rustream/config.toml; systemctl restart rustream'"
 ```
 
-Затем `systemctl restart rustream`. Без прокси поиск вернёт 502, остальная
-библиотека продолжит работать.
+Проверка:
+
+```bash
+ssh pve "pct exec 104 -- curl -s -o /dev/null -w '%{http_code}\n' --proxy http://127.0.0.1:7890 https://music.youtube.com"
+ssh pve "pct exec 104 -- journalctl -u mihomo -n 20 --no-pager"
+```
+
+`ytm_proxy` используется и для запросов к YouTube, и для `yt-dlp`, поэтому его
+нужно задавать именно в `config.toml` сервера. Ключ VLESS — секрет: он живёт
+только в `/opt/mihomo/config.yaml` (chmod 600) и не попадает в git.
 
 ## Конфиг
 
@@ -97,7 +116,7 @@ ytm_enabled = true
 ytdlp_path = "/opt/rustream/bin/yt-dlp"
 ytm_cache_dir = "cache/ytm"
 ytm_cache_max_mb = 1024
-# ytm_proxy = "socks5h://host:1080"
+ytm_proxy = "http://127.0.0.1:7890"   # локальный mihomo
 ```
 
 Переменные окружения перекрывают файл: `RUSTREAM_CONFIG` (путь к конфигу),

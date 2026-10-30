@@ -1,0 +1,58 @@
+# mihomo (Clash Meta) config for rustream: only YouTube traffic leaves through
+# the outbound proxy, everything else goes direct.
+#
+# Copy to /opt/mihomo/config.yaml on the server (chmod 600, chown nobody),
+# fill in your own outbound, then `systemctl restart mihomo` and set
+#   ytm_proxy = "http://127.0.0.1:7890"
+# in /opt/rustream/config.toml.
+
+mixed-port: 7890
+allow-lan: false
+bind-address: 127.0.0.1
+mode: rule
+log-level: warning
+ipv6: false
+tcp-concurrent: true
+
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: normal
+  nameserver:
+    - 9.9.9.9
+    - 1.1.1.1
+  proxy-server-nameserver:
+    - 9.9.9.9
+    - 1.1.1.1
+
+proxies:
+  # VLESS + WebSocket + TLS, as exported by most VPN panels.
+  - name: vless
+    type: vless
+    server: example.com
+    port: 443
+    uuid: 00000000-0000-0000-0000-000000000000
+    network: ws
+    tls: true
+    udp: true
+    servername: example.com
+    client-fingerprint: chrome
+    ws-opts:
+      path: /path-from-panel
+      headers:
+        Host: example.com
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - vless
+
+rules:
+  - DOMAIN-SUFFIX,googlevideo.com,PROXY
+  - DOMAIN-SUFFIX,youtube.com,PROXY
+  - DOMAIN-SUFFIX,youtu.be,PROXY
+  - DOMAIN-SUFFIX,ytimg.com,PROXY
+  - DOMAIN-SUFFIX,ggpht.com,PROXY
+  - DOMAIN-SUFFIX,googleusercontent.com,PROXY
+  - MATCH,DIRECT
