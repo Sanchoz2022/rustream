@@ -27,6 +27,10 @@ pub struct Config {
     /// evicted first. 0 disables caching (streams are only proxied).
     #[serde(default = "default_ytm_cache_max_mb")]
     pub ytm_cache_max_mb: u64,
+    /// Optional proxy for YouTube Music (e.g. `socks5h://host:1080` or
+    /// `http://host:3128`), used by both InnerTube requests and yt-dlp.
+    #[serde(default)]
+    pub ytm_proxy: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -68,6 +72,7 @@ impl Default for Config {
             ytdlp_path: default_ytdlp_path(),
             ytm_cache_dir: default_ytm_cache_dir(),
             ytm_cache_max_mb: default_ytm_cache_max_mb(),
+            ytm_proxy: None,
         }
     }
 }
@@ -101,6 +106,9 @@ pub fn load() -> Result<Config> {
                 *field = value;
             }
         }
+    }
+    if let Ok(value) = std::env::var("RUSTREAM_YTM_PROXY") {
+        config.ytm_proxy = Some(value).filter(|value| !value.trim().is_empty());
     }
     Ok(config)
 }

@@ -65,6 +65,24 @@ ssh pve 'pct exec 104 -- /opt/rustream/bin/yt-dlp --version'
 пользователям и ограничен `ytm_cache_max_mb`. Удалять его можно целиком —
 он пересоберётся.
 
+## Если YouTube недоступен с сервера
+
+Провайдеры и корпоративные сети часто блокируют `music.youtube.com`. Проверка:
+
+```bash
+ssh pve "pct exec 104 -- curl -s -o /dev/null -w '%{http_code}\n' --max-time 8 https://music.youtube.com"
+```
+
+Если код не `200`, укажите прокси в `config.toml` — он используется и для API
+YouTube, и для `yt-dlp`:
+
+```toml
+ytm_proxy = "socks5h://192.168.10.5:1080"   # или http://host:3128
+```
+
+Затем `systemctl restart rustream`. Без прокси поиск вернёт 502, остальная
+библиотека продолжит работать.
+
 ## Конфиг
 
 ```toml
@@ -79,6 +97,7 @@ ytm_enabled = true
 ytdlp_path = "/opt/rustream/bin/yt-dlp"
 ytm_cache_dir = "cache/ytm"
 ytm_cache_max_mb = 1024
+# ytm_proxy = "socks5h://host:1080"
 ```
 
 Переменные окружения перекрывают файл: `RUSTREAM_CONFIG` (путь к конфигу),

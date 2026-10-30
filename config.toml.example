@@ -30,6 +30,9 @@ ytdlp_path = "yt-dlp"
 ytm_cache_dir = "cache/ytm"
 # Предельный размер кэша в мегабайтах, 0 — не кэшировать
 ytm_cache_max_mb = 1024
+# Прокси для YouTube Music, если сеть сервера его не пускает
+# (используется и для запросов, и для yt-dlp):
+# ytm_proxy = "socks5h://192.168.10.5:1080"   # или "http://host:3128"
 
 # Last.fm: приложение на https://www.last.fm/api/account/create
 # Ключи можно вписать здесь или сохранить из веб-интерфейса

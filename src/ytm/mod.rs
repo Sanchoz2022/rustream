@@ -47,13 +47,18 @@ pub struct YtmState {
 }
 
 impl YtmState {
-    pub fn new() -> Result<Self> {
+    pub fn new(proxy: Option<&str>) -> Result<Self> {
+        let mut builder = reqwest::Client::builder()
+            .user_agent(innertube::USER_AGENT)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30));
+        // YouTube is unreachable from some networks; a proxy fixes both the
+        // API calls and the audio CDN.
+        if let Some(proxy) = proxy.filter(|proxy| !proxy.trim().is_empty()) {
+            builder = builder.proxy(reqwest::Proxy::all(proxy)?);
+        }
         Ok(Self {
-            client: reqwest::Client::builder()
-                .user_agent(innertube::USER_AGENT)
-                .connect_timeout(Duration::from_secs(10))
-                .timeout(Duration::from_secs(30))
-                .build()?,
+            client: builder.build()?,
             resolved: Mutex::new(HashMap::new()),
             downloading: Arc::new(Mutex::new(HashSet::new())),
         })
@@ -423,26 +428,32 @@ async fn resolve(
     }
 
     let cookie_file = write_cookie_file(cookies).await?;
-    let output = tokio::time::timeout(
-        YTDLP_TIMEOUT,
-        tokio::process::Command::new(&config.ytdlp_path)
-            .args([
-                "--quiet",
-                "--no-warnings",
-                "--no-playlist",
-                "--no-cache-dir",
-                "-f",
-                "bestaudio[ext=m4a]/bestaudio",
-                "-O",
-                "%(.{url,ext,filesize,filesize_approx})j",
-                "--cookies",
-            ])
-            .arg(&cookie_file)
-            .arg(format!("https://music.youtube.com/watch?v={video_id}"))
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await;
+    let mut command = tokio::process::Command::new(&config.ytdlp_path);
+    command.args([
+        "--quiet",
+        "--no-warnings",
+        "--no-playlist",
+        "--no-cache-dir",
+        // Fail fast when the CDN is unreachable instead of hanging the player.
+        "--socket-timeout",
+        "15",
+        "-f",
+        "bestaudio[ext=m4a]/bestaudio",
+        "-O",
+        "%(.{url,ext,filesize,filesize_approx})j",
+        "--cookies",
+    ]);
+    command.arg(&cookie_file);
+    if let Some(proxy) = config
+        .ytm_proxy
+        .as_deref()
+        .filter(|proxy| !proxy.trim().is_empty())
+    {
+        command.arg("--proxy").arg(proxy);
+    }
+    command.arg(format!("https://music.youtube.com/watch?v={video_id}"));
+    command.kill_on_drop(true);
+    let output = tokio::time::timeout(YTDLP_TIMEOUT, command.output()).await;
     tokio::fs::remove_file(&cookie_file).await.ok();
 
     let output = output
@@ -704,7 +715,7 @@ mod tests {
             ytdlp_path: "yt-dlp".into(),
             ..Config::default()
         };
-        let state = YtmState::new().unwrap();
+        let state = YtmState::new(None).unwrap();
         let resolved = resolve(&state, &config, "u", "9RfVp-GhKfs", &[])
             .await
             .unwrap();

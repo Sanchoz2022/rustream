@@ -81,10 +81,10 @@ root.innerHTML = `
       <button class="now-playing-pill" id="np-pill" title="Открыть плеер">
         ${icon('wave')}<span>Сейчас играет</span>
       </button>
-      <button class="user-btn" id="user-btn" data-action="open-settings" title="Аккаунт и настройки">
+      <a class="user-btn" id="user-btn" href="#/profile" title="Профиль" aria-label="Профиль">
         <span class="user-avatar" id="user-avatar">?</span>
-        <span class="user-name" id="user-name">Аккаунт</span>
-      </button>
+        <span class="user-name" id="user-name">Профиль</span>
+      </a>
     </div>
   </header>
 
@@ -92,12 +92,14 @@ root.innerHTML = `
     <nav class="nav" aria-label="Разделы">
       <a href="#/home" data-nav="home" class="nav-item"><span class="nav-icon">${icon('home')}</span><span class="nav-label">Главная</span></a>
       <a href="#/live" data-nav="live" class="nav-item"><span class="nav-icon">${icon('radio')}</span><span class="nav-label">Live</span></a>
+      <a href="#/ytm" data-nav="ytm" class="nav-item"><span class="nav-icon">${icon('ytm')}</span><span class="nav-label">YouTube</span></a>
       <a href="#/artists" data-nav="artists" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Артисты</span></a>
       <a href="#/albums" data-nav="albums" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Альбомы</span></a>
       <a href="#/tracks" data-nav="tracks" class="nav-item"><span class="nav-icon">${icon('music')}</span><span class="nav-label">Треки</span></a>
       <a href="#/stats" data-nav="stats" class="nav-item"><span class="nav-icon">${icon('chart')}</span><span class="nav-label">Статистика</span></a>
       <a href="#/playlists" data-nav="playlists" class="nav-item"><span class="nav-icon">${icon('playlist')}</span><span class="nav-label">Плейлисты</span></a>
       <a href="#/favorites" data-nav="favorites" class="nav-item"><span class="nav-icon">${icon('heart')}</span><span class="nav-label">Избранное</span></a>
+      <a href="#/profile" data-nav="profile" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Профиль</span></a>
       <div class="nav-spacer"></div>
       <div class="nav-hint">
         <span class="dot"></span>
