@@ -1,25 +1,21 @@
-# syntax=docker/dockerfile:1.7
 # Multi-stage build: web UI (Vite) + static musl binary + small runtime image.
+# Works with both the classic builder and BuildKit.
 
 FROM node:22-alpine AS ui
 WORKDIR /ui
 COPY rustream-ui/package.json rustream-ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY rustream-ui/ ./
-# vite.config.js writes to ../static
+# vite.config.js writes to ../static, i.e. /static
 RUN npm run build
 
 FROM rust:1-alpine AS builder
-RUN apk add --no-cache musl-dev
+# musl-dev/build-base: the TLS stack; perl: some crates' build scripts.
+RUN apk add --no-cache musl-dev build-base perl
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
-# Cache mounts keep the registry and compiled dependencies between builds;
-# the binary is copied out because the mount is not part of the image layer.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/build/target \
-    find src -type f -exec touch {} + \
-    && cargo build --release --locked --target x86_64-unknown-linux-musl \
+RUN cargo build --release --locked --target x86_64-unknown-linux-musl \
     && cp target/x86_64-unknown-linux-musl/release/rustream /rustream
 
 FROM alpine:3.20
