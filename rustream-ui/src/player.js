@@ -272,6 +272,26 @@ export class Player extends EventTarget {
     await this.playAt(index);
   }
 
+  moveInQueue(oldIndex, newIndex) {
+    if (oldIndex === newIndex || oldIndex < 0 || newIndex < 0) return;
+    if (oldIndex >= this.queue.length || newIndex >= this.queue.length) return;
+
+    const [movedTrack] = this.queue.splice(oldIndex, 1);
+    this.queue.splice(newIndex, 0, movedTrack);
+
+    // Обновить текущий индекс
+    if (this.index === oldIndex) {
+      this.index = newIndex;
+    } else if (oldIndex < this.index && newIndex >= this.index) {
+      this.index--;
+    } else if (oldIndex > this.index && newIndex <= this.index) {
+      this.index++;
+    }
+
+    this._storeQueue();
+    this._emit('queue');
+  }
+
   _randomIndex() {
     if (this.queue.length <= 1) return this.index;
     let index = this.index;

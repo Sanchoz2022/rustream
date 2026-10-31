@@ -50,6 +50,44 @@
   --font: 'Inter', -apple-system, 'SF Pro Text', BlinkMacSystemFont, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* Light mode */
+html.light-mode {
+  --primary: #6750a4;
+  --on-primary: #ffffff;
+  --primary-container: #eaddff;
+  --on-primary-container: #21005d;
+  --secondary: #00696e;
+  --on-secondary: #ffffff;
+  --secondary-container: #9cf1f5;
+  --on-secondary-container: #002022;
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+
+  --surface: #fef7ff;
+  --surface-1: #f7f2fa;
+  --surface-2: #f1ecf4;
+  --surface-3: #ebe6ee;
+  --surface-4: #e6e1e9;
+  --on-surface: #1c1b1f;
+  --on-surface-variant: #49454f;
+  --outline: #79747e;
+  --outline-variant: rgba(0, 0, 0, 0.08);
+
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-strong: rgba(255, 255, 255, 0.92);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --glass-highlight: rgba(0, 0, 0, 0.04);
+  --glow-a: rgba(103, 80, 164, 0.15);
+  --glow-b: rgba(0, 105, 110, 0.12);
+  --glow-c: rgba(186, 26, 26, 0.08);
+  --blob-a: rgba(103, 80, 164, 0.25);
+  --blob-b: rgba(0, 150, 145, 0.2);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-3: 0 24px 70px rgba(0, 0, 0, 0.2);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -1950,6 +1988,36 @@ img {
   color: var(--on-surface-variant);
 }
 
+.queue-drag-handle {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.4;
+  cursor: grab;
+  transition: opacity 0.2s;
+}
+
+.queue-row:hover .queue-drag-handle {
+  opacity: 0.7;
+}
+
+.queue-drag-handle:active {
+  cursor: grabbing;
+}
+
+.queue-row-ghost {
+  opacity: 0.4;
+}
+
+.queue-row-drag {
+  background: rgba(199, 166, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: grabbing;
+}
+
 .switch {
   position: relative;
   display: inline-block;
@@ -3670,6 +3738,46 @@ a.hero-disc:hover .disc-label {
 /* ------------------------------------------------------------------ */
 /* Theme picker                                                        */
 /* ------------------------------------------------------------------ */
+
+.theme-mode-picker {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--outline-variant);
+}
+
+.mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  transition: all 0.2s var(--ease);
+}
+
+.mode-btn:hover {
+  color: var(--on-surface);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-btn.active {
+  color: var(--on-primary-container);
+  background: var(--primary-container);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mode-btn .icon {
+  width: 18px;
+  height: 18px;
+}
 
 .theme-picker {
   display: flex;

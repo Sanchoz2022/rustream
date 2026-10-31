@@ -1,6 +1,7 @@
 import './style.css';
 import { icon } from './icons.js';
 import * as api from './api.js';
+import Sortable from 'sortablejs';
 import {
   Player,
   EQ_BANDS,
@@ -1437,10 +1438,11 @@ function renderQueuePanel(panel) {
     <div class="panel-title"><h3>Очередь</h3><span class="muted">${queue.length} ${plural(queue.length, 'трек', 'трека', 'треков')}</span></div>
     ${
       queue.length
-        ? `<div class="queue-list">${queue
+        ? `<div class="queue-list" id="queue-list">${queue
             .map(
               (track, index) => `
-              <button class="queue-row ${index === player.index ? 'active' : ''}" data-action="play-queue" data-index="${index}">
+              <button class="queue-row ${index === player.index ? 'active' : ''}" data-action="play-queue" data-index="${index}" data-track-id="${track.id}">
+                <span class="queue-drag-handle">${icon('menu')}</span>
                 <span class="queue-cover">${coverHtml(track.coverArt || track.albumId, { size: 80 })}</span>
                 <span class="queue-main"><strong>${esc(track.title)}</strong><small>${esc(track.artist || '')}</small></span>
                 <span class="queue-time">${formatTime(track.duration)}</span>
@@ -1449,6 +1451,24 @@ function renderQueuePanel(panel) {
             .join('')}</div>`
         : emptyPanel('queue', 'Очередь пуста', 'Нажмите на трек или альбом, чтобы начать воспроизведение.')
     }`;
+  
+  // Инициализация Sortable для drag-and-drop
+  const queueList = $('#queue-list');
+  if (queueList && queue.length > 0) {
+    new Sortable(queueList, {
+      animation: 150,
+      handle: '.queue-drag-handle',
+      ghostClass: 'queue-row-ghost',
+      dragClass: 'queue-row-drag',
+      onEnd: (evt) => {
+        if (evt.oldIndex !== evt.newIndex) {
+          player.moveInQueue(evt.oldIndex, evt.newIndex);
+          // Перерендерить очередь после перемещения
+          setTimeout(() => renderQueuePanel(panel), 50);
+        }
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1748,6 +1768,28 @@ function applyTheme(theme) {
   document.body.style.setProperty('--primary', preset ? '' : value);
   localStorage.setItem('rustream.theme', value);
 }
+
+function applyColorMode(mode) {
+  const effectiveMode = mode === 'auto' 
+    ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    : mode;
+  
+  document.documentElement.classList.toggle('light-mode', effectiveMode === 'light');
+}
+
+// Инициализация color mode при загрузке
+(function initColorMode() {
+  const savedMode = localStorage.getItem('colorMode') || 'dark';
+  applyColorMode(savedMode);
+  
+  // Слушать изменения системной темы для режима 'auto'
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    const mode = localStorage.getItem('colorMode');
+    if (mode === 'auto') {
+      applyColorMode('auto');
+    }
+  });
+})();
 
 /** Persist the choice in the profile so every device follows it. */
 async function saveTheme(theme) {
@@ -2076,7 +2118,19 @@ async function openSettings() {
 // ---------------------------------------------------------------------------
 
 function themePickerHtml() {
+  const colorMode = localStorage.getItem('colorMode') || 'dark';
   return `
+    <div class="theme-mode-picker">
+      <button class="mode-btn ${colorMode === 'dark' ? 'active' : ''}" data-action="color-mode" data-mode="dark">
+        ${icon('moon')} Тёмная
+      </button>
+      <button class="mode-btn ${colorMode === 'light' ? 'active' : ''}" data-action="color-mode" data-mode="light">
+        ${icon('sun')} Светлая
+      </button>
+      <button class="mode-btn ${colorMode === 'auto' ? 'active' : ''}" data-action="color-mode" data-mode="auto">
+        ${icon('settings')} Системная
+      </button>
+    </div>
     <div class="theme-picker">
       ${THEMES.map(
         (theme) => `<button class="theme-swatch ${state.theme === theme.id ? 'active' : ''}" data-action="theme" data-theme="${theme.id}">
@@ -2450,6 +2504,16 @@ document.addEventListener('click', async (event) => {
     $$('[data-action="theme"]').forEach((item) =>
       item.classList.toggle('active', item.dataset.theme === state.theme),
     );
+    return;
+  }
+  if (action === 'color-mode') {
+    const mode = actionEl.dataset.mode;
+    localStorage.setItem('colorMode', mode);
+    applyColorMode(mode);
+    $$('[data-action="color-mode"]').forEach((item) =>
+      item.classList.toggle('active', item.dataset.mode === mode),
+    );
+    toast(`Режим: ${mode === 'dark' ? 'тёмный' : mode === 'light' ? 'светлый' : 'системный'}`);
     return;
   }
   if (action === 'logout') {
