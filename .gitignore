@@ -1,5 +1,4 @@
 /target/
-/static/
 /cache/
 /data/
 *.db
