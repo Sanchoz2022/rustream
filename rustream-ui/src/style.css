@@ -2694,7 +2694,9 @@ textarea.input {
   width: min(1040px, 100%);
   height: min(720px, 100%);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Дети листа: ручка, шапка, тело, транспорт — четыре строки, иначе шапка
+     попадает в растянутую 1fr и висит посреди пустоты. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   border-radius: var(--shape-xl);
   background: var(--surface-container);
   box-shadow: var(--elev-3);
@@ -3788,8 +3790,12 @@ body.modal-open #view {
     /* minmax(0, 1fr), а не 1fr: иначе широкий эквалайзер растягивает
        колонку и полосы уезжают за край экрана. */
     grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-    padding: 14px 18px 18px;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: start;
+    gap: 10px;
+    padding: 10px 18px 6px;
+    /* Скроллится только содержимое: шапка с вкладками и транспорт остаются
+       на месте, иначе высокий экран «прокручивает» весь лист и режет вкладки. */
     overflow-y: auto;
     overflow-x: hidden;
   }
@@ -3797,10 +3803,14 @@ body.modal-open #view {
   .np-side {
     align-items: center;
     text-align: center;
+    overflow: visible;
+    gap: 8px;
   }
 
+  /* Обложка масштабируется и от ширины, и от высоты: на 20:9 экран высокий,
+     фиксированные 300px оставляли провал между обложкой и транспортом. */
   .np-cover {
-    width: min(74vw, 300px);
+    width: min(84vw, 38vh, 380px);
     aspect-ratio: 1 / 1;
   }
 
@@ -3814,7 +3824,93 @@ body.modal-open #view {
   }
 
   .np-transport {
-    padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 18px calc(12px + env(safe-area-inset-bottom, 0));
+    background: var(--surface-container);
+  }
+
+  .np-seek-line .time {
+    font-size: 11px;
+  }
+
+  .np-volume {
+    margin-top: 0;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .np-volume input[type='range'] {
+    width: 130px;
+  }
+
+  .np-controls {
+    margin: 8px 0 0;
+    gap: 16px;
+  }
+
+  .np-controls .play-btn {
+    width: 64px;
+    height: 64px;
+  }
+
+  .np-actions {
+    margin-top: 0;
+  }
+
+  /* Компактная шапка для очереди и эквалайзера. */
+  .np.compact .np-cover {
+    display: none;
+  }
+
+  .np.compact .np-side {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    gap: 10px;
+  }
+
+  .np.compact .np-meta {
+    text-align: left;
+    flex: 1;
+  }
+
+  .np.compact .np-meta h2 {
+    font-size: 15px;
+  }
+
+  .np.compact .np-meta p {
+    font-size: 12px;
+  }
+
+  .np.compact .np-chips,
+  .np.compact .np-actions {
+    display: none;
+  }
+
+  .np.compact .np-controls {
+    margin: 0;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  .np.compact .np-controls .play-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .np.compact .np-controls .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Лист вкладки (текст/очередь) забирает остаток высоты, а не висит
+     посреди пустого пространства. */
+  .np-panel {
+    border-top: 1px solid var(--outline-variant);
+    padding-top: 10px;
+    min-height: 0;
   }
 
   .eq {

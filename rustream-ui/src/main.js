@@ -1422,6 +1422,9 @@ function renderNowPlaying() {
   if (!state.npOpen) return;
   const track = player.track;
   $$('.np-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.npTab === state.npTab));
+  // На телефоне обложка во весь экран оставляет очередь без места, поэтому
+  // для «Очереди» и «Эквалайзера» шапка сжимается до строки.
+  $('#np').classList.toggle('compact', state.npTab !== 'lyrics');
 
   const side = $('#np-side');
   side.innerHTML = `
