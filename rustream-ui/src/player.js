@@ -92,11 +92,12 @@ export class Player extends EventTarget {
     this.audio.addEventListener('waiting', () => this._emit('state'));
     this.audio.addEventListener('playing', () => this._emit('state'));
     this.audio.addEventListener('error', () => {
-      if (this.track) {
-        this.dispatchEvent(
-          new CustomEvent('error', { detail: `Не удалось воспроизвести «${this.track.title}»` }),
-        );
-      }
+      if (!this.track) return;
+      const isYtm = this.track.source === 'ytm' || String(this.track.id).startsWith('ytm-');
+      const detail = isYtm
+        ? `YouTube не отдал поток для «${this.track.title}». Проверьте, что трек доступен, и обновите cookies в профиле.`
+        : `Не удалось воспроизвести «${this.track.title}». Файл повреждён или недоступен.`;
+      this.dispatchEvent(new CustomEvent('error', { detail }));
     });
   }
 

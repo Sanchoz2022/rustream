@@ -346,3 +346,9 @@ export async function ytmLiked(limit = 200) {
   const data = await jsonFetch(`/api/ytm/liked?limit=${limit}`);
   return data?.tracks || [];
 }
+
+/** Уже известные профилю треки YouTube — из локальной БД, без сети. */
+export async function ytmHistory(limit = 40) {
+  const data = await jsonFetch(`/api/ytm/history?limit=${limit}`);
+  return data?.tracks || [];
+}

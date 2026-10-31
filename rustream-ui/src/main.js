@@ -316,7 +316,7 @@ function toast(message, kind = 'info') {
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => {
     el.className = 'toast';
-  }, 3200);
+  }, kind === 'error' ? 6000 : 3200);
 }
 
 function showLoading() {
@@ -389,11 +389,19 @@ function plural(n, one, few, many) {
   return many;
 }
 
-function trackRow(track, index, { showAlbum = true, showCover = false, playlistId = null } = {}) {
+/** Метка источника: YouTube-треки видно сразу, локальные — по формату. */
+function sourceBadge(track) {
+  if (track?.source === 'ytm') {
+    return `<span class="track-badge ytm" title="Источник: YouTube Music">YT</span>`;
+  }
+  return `<span class="track-badge">${esc((track?.suffix || 'flac').toUpperCase())}</span>`;
+}
+
+function trackRow(track, index, { showAlbum = true, showCover = false, playlistId = null, rowAction = 'play-row', rowList = null } = {}) {
   const isPlaying = player.track?.id === track.id;
   const liked = state.favorites.has(track.id);
   const number = track.track && track.track > 0 ? track.track : index + 1;
-  return `<div class="track-row ${isPlaying ? 'playing' : ''} ${showCover ? 'has-cover' : ''}" data-action="play-row" data-index="${index}" tabindex="0">
+  return `<div class="track-row ${isPlaying ? 'playing' : ''} ${showCover ? 'has-cover' : ''}" data-action="${rowAction}" data-index="${index}" data-track-id="${esc(track.id)}" ${rowList ? `data-list="${rowList}"` : ''} tabindex="0">
     <div class="track-index">
       <span class="track-num">${number}</span>
       <span class="track-eq"><i></i><i></i><i></i></span>
@@ -403,7 +411,7 @@ function trackRow(track, index, { showAlbum = true, showCover = false, playlistI
       <div class="track-title">${esc(track.title)}</div>
       <div class="track-sub">${esc(track.artist || '')}${showAlbum && track.album ? ` · ${esc(track.album)}` : ''}</div>
     </div>
-    <span class="track-badge">${esc((track.suffix || 'flac').toUpperCase())}</span>
+    ${sourceBadge(track)}
     <span class="track-duration">${formatTime(track.duration)}</span>
     <button class="icon-btn row-btn like ${liked ? 'active' : ''}" data-action="like" data-id="${track.id}" title="В избранное">${icon(liked ? 'heart' : 'heartOutline')}</button>
     <button class="icon-btn row-btn dislike ${state.dislikes.has(track.id) ? 'active' : ''}" data-action="dislike" data-id="${track.id}" title="Не нравится">${icon('thumbDown')}</button>
@@ -579,6 +587,16 @@ async function renderHome(seq) {
   if (seq !== state.renderSeq) return;
   cache.recent = recent;
 
+  // YouTube подмешивается в главную: сервер и внешний источник в одной ленте.
+  const ytmStatus = state.ytmStatus || (await api.getYtmStatus().catch(() => null));
+  state.ytmStatus = ytmStatus;
+  let ytmRecent = [];
+  if (ytmStatus?.connected) {
+    ytmRecent = await api.ytmHistory(10).catch(() => []);
+  }
+  if (seq !== state.renderSeq) return;
+  state.ytmLists = { ...(state.ytmLists || {}), history: ytmRecent };
+
   state.currentTracks = tracks;
   const current = player.track;
   const continueQueue = player.queue.length ? player.queue : null;
@@ -622,6 +640,21 @@ async function renderHome(seq) {
         </div>
         <div class="grid cards">${recent.slice(0, 8).map(albumCard).join('')}</div>
       </section>
+
+      ${
+        ytmRecent.length
+          ? `<section class="section">
+              <div class="section-head">
+                <div>
+                  <h2>Из YouTube Music</h2>
+                  <p class="muted">Внешний источник — помечено меткой <span class="track-badge ytm inline">YT</span></p>
+                </div>
+                <a class="text-link" href="#/ytm">Открыть YouTube ${icon('next')}</a>
+              </div>
+              ${trackList(ytmRecent.slice(0, 6), { showCover: true, rowAction: 'play-ytm-row', rowList: 'history' })}
+            </section>`
+          : ''
+      }
 
       <section class="section">
         <div class="section-head">
@@ -1296,12 +1329,18 @@ function renderNowPlaying() {
           <span class="chip" id="np-buffer">буфер 0:00</span>
         ` : ''}
       </div>
+      <div class="np-controls">
+        <button class="icon-btn ${player.shuffle ? 'active' : ''}" data-action="shuffle" title="Перемешать">${icon('shuffle')}</button>
+        <button class="icon-btn" data-action="prev" title="Предыдущий">${icon('prev')}</button>
+        <button class="play-btn" data-action="toggle" title="${player.paused ? 'Играть' : 'Пауза'}">${icon(player.paused ? 'play' : 'pause')}</button>
+        <button class="icon-btn" data-action="next" title="Следующий">${icon('next')}</button>
+        <button class="icon-btn ${player.repeat !== 'off' ? 'active' : ''}" data-action="repeat" title="Повтор">${icon(player.repeat === 'one' ? 'repeatOne' : 'repeat')}</button>
+      </div>
       <div class="np-actions">
-        <button class="icon-btn like ${track && state.favorites.has(track.id) ? 'active' : ''}" data-action="like-current">${icon(track && state.favorites.has(track.id) ? 'heart' : 'heartOutline')}</button>
+        <button class="icon-btn like ${track && state.favorites.has(track.id) ? 'active' : ''}" data-action="like-current" title="В избранное">${icon(track && state.favorites.has(track.id) ? 'heart' : 'heartOutline')}</button>
         <button class="icon-btn dislike ${track && state.dislikes.has(track.id) ? 'active' : ''}" data-action="dislike-current" title="Не нравится">${icon('thumbDown')}</button>
-        <button class="btn glass" data-action="toggle">${icon(player.paused ? 'play' : 'pause')} ${player.paused ? 'Играть' : 'Пауза'}</button>
         <button class="icon-btn" data-action="add-to-playlist" data-id="${track?.id || ''}" ${track ? '' : 'disabled'} title="В плейлист">${icon('add')}</button>
-        <button class="icon-btn" data-action="jump-album" ${track?.albumId ? '' : 'disabled'}>${icon('album')}</button>
+        <button class="icon-btn" data-action="jump-album" ${track?.albumId ? '' : 'disabled'} title="К альбому">${icon('album')}</button>
       </div>
     </div>`;
 
@@ -1602,12 +1641,15 @@ function updatePlayState() {
   const playing = !player.paused && !!player.track;
   $('#play-btn').innerHTML = icon(playing ? 'pause' : 'play');
   $('#pb-cover').classList.toggle('playing', playing);
-  const npPlay = $('.np-actions [data-action="toggle"]');
-  if (npPlay) npPlay.innerHTML = `${icon(playing ? 'pause' : 'play')} ${playing ? 'Пауза' : 'Играть'}`;
-  // Highlight current track rows.
+  const npPlay = $('.np-controls [data-action="toggle"]');
+  if (npPlay) {
+    npPlay.innerHTML = icon(playing ? 'pause' : 'play');
+    npPlay.title = playing ? 'Пауза' : 'Играть';
+  }
+  // Highlight current track rows across every list (server + YouTube).
+  const currentId = player.track?.id || null;
   $$('.track-row').forEach((row) => {
-    const track = state.currentTracks[Number(row.dataset.index)];
-    row.classList.toggle('playing', track?.id === player.track?.id);
+    row.classList.toggle('playing', !!currentId && row.dataset.trackId === currentId);
   });
 }
 
@@ -1615,6 +1657,13 @@ function updateModeUi() {
   $('#shuffle-btn').classList.toggle('active', player.shuffle);
   $('#repeat-btn').classList.toggle('active', player.repeat !== 'off');
   $('#repeat-btn').innerHTML = icon(player.repeat === 'one' ? 'repeatOne' : 'repeat');
+  const npShuffle = $('.np-controls [data-action="shuffle"]');
+  if (npShuffle) npShuffle.classList.toggle('active', player.shuffle);
+  const npRepeat = $('.np-controls [data-action="repeat"]');
+  if (npRepeat) {
+    npRepeat.classList.toggle('active', player.repeat !== 'off');
+    npRepeat.innerHTML = icon(player.repeat === 'one' ? 'repeatOne' : 'repeat');
+  }
 }
 
 function updateVolumeUi() {
@@ -1638,11 +1687,34 @@ function updateVolumeUi() {
 // Auth / account
 // ---------------------------------------------------------------------------
 
+/** Аватар: если к профилю привязан YouTube — берём его фотографию. */
+function avatarPhoto() {
+  const photo = state.ytmStatus?.account?.photo;
+  return typeof photo === 'string' && photo.startsWith('http') ? photo : '';
+}
+
+function avatarHtml(name, className = 'user-avatar') {
+  const photo = avatarPhoto();
+  if (photo) {
+    return `<span class="${className} has-photo"><img src="${esc(photo)}" alt="" referrerpolicy="no-referrer" /></span>`;
+  }
+  return `<span class="${className}">${esc(initials(name))}</span>`;
+}
+
 function updateUserUi() {
   const name = displayName();
   const avatar = $('#user-avatar');
   const label = $('#user-name');
-  if (avatar) avatar.textContent = initials(name);
+  const photo = avatarPhoto();
+  if (avatar) {
+    if (photo) {
+      avatar.classList.add('has-photo');
+      avatar.innerHTML = `<img src="${esc(photo)}" alt="" referrerpolicy="no-referrer" />`;
+    } else {
+      avatar.classList.remove('has-photo');
+      avatar.textContent = initials(name);
+    }
+  }
   if (label) label.textContent = name;
 }
 
@@ -1699,6 +1771,8 @@ async function bootstrap() {
     state.me = session.user;
     state.meSettings = session.settings;
     applyTheme(session.settings?.theme || localStorage.getItem('rustream.theme') || 'violet');
+    // Аватар берём из YouTube, если профиль привязан — грузим статус один раз.
+    state.ytmStatus = await api.getYtmStatus().catch(() => null);
     updateUserUi();
     hideLogin();
     await Promise.all([loadFavorites(), loadMeStats()]);
@@ -1760,13 +1834,103 @@ const THEMES = [
 
 const HEX_THEME = /^#[0-9a-f]{6}$/i;
 
+// --- Цветовая математика для «своего цвета» --------------------------------
+// Пользователь выбирает один цвет. Из него выводим весь тон: подкрашиваем
+// поверхности, строим контейнеры и подбираем on-цвета по яркости, чтобы
+// текст на кнопках никогда не сливался.
+
+function hexToRgb(hex) {
+  const value = hex.replace('#', '');
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex({ r, g, b }) {
+  const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${[clamp(r), clamp(g), clamp(b)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function mix(a, b, weight) {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  return rgbToHex({
+    r: x.r * weight + y.r * (1 - weight),
+    g: x.g * weight + y.g * (1 - weight),
+    b: x.b * weight + y.b * (1 - weight),
+  });
+}
+
+/** Относительная яркость по WCAG. */
+function luminance(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const channel = (v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+/** Читаемый текст поверх указанного фона. */
+function readableOn(background) {
+  return luminance(background) > 0.42 ? '#1a1917' : '#ffffff';
+}
+
+/** Перекрасить интерфейс под произвольный акцент. */
+function applyCustomPalette(hex) {
+  const light = document.documentElement.classList.contains('light-mode');
+  const baseSurface = light ? '#faf8f4' : '#101013';
+  const baseContainer = light ? '#efece4' : '#17171c';
+
+  // Поверхности слегка уходят в оттенок акцента — фон перестаёт быть «никаким».
+  const tintAmount = light ? 0.06 : 0.1;
+  const surface = mix(hex, baseSurface, tintAmount);
+  const container = mix(hex, baseContainer, tintAmount * 1.25);
+  const containerHigh = mix(hex, light ? '#e9e5dc' : '#1d1d23', tintAmount * 1.4);
+
+  const primaryContainer = mix(hex, light ? '#ffffff' : '#101013', light ? 0.22 : 0.3);
+
+  const style = document.body.style;
+  style.setProperty('--primary', hex);
+  style.setProperty('--on-primary', readableOn(hex));
+  style.setProperty('--primary-container', primaryContainer);
+  style.setProperty('--on-primary-container', readableOn(primaryContainer));
+  style.setProperty('--surface', surface);
+  style.setProperty('--surface-container', container);
+  style.setProperty('--surface-container-high', containerHigh);
+  style.setProperty('--surface-container-highest', mix(hex, containerHigh, 0.5));
+  style.setProperty('--surface-container-low', mix(hex, surface, 0.5));
+}
+
+/** Снять inline-палитру, когда выбран готовый пресет. */
+function clearCustomPalette() {
+  const style = document.body.style;
+  [
+    '--primary',
+    '--on-primary',
+    '--primary-container',
+    '--on-primary-container',
+    '--surface',
+    '--surface-container',
+    '--surface-container-high',
+    '--surface-container-highest',
+    '--surface-container-low',
+  ].forEach((name) => style.removeProperty(name));
+}
+
 function applyTheme(theme) {
   const preset = THEMES.some((item) => item.id === theme);
   const value = preset ? theme : HEX_THEME.test(theme || '') ? theme.toLowerCase() : 'violet';
   state.theme = value;
   document.body.dataset.theme = preset ? value : 'custom';
-  document.body.style.setProperty('--primary', preset ? '' : value);
   localStorage.setItem('rustream.theme', value);
+  if (preset) {
+    clearCustomPalette();
+  } else {
+    applyCustomPalette(value);
+  }
 }
 
 function applyColorMode(mode) {
@@ -1775,6 +1939,9 @@ function applyColorMode(mode) {
     : mode;
   
   document.documentElement.classList.toggle('light-mode', effectiveMode === 'light');
+
+  // «Свой цвет» строит поверхности от текущего режима — пересчитываем.
+  if (state.theme && HEX_THEME.test(state.theme)) applyCustomPalette(state.theme);
 }
 
 // Инициализация color mode при загрузке
@@ -1789,6 +1956,24 @@ function applyColorMode(mode) {
       applyColorMode('auto');
     }
   });
+})();
+
+// --- Плотность интерфейса --------------------------------------------------
+const DENSITIES = [
+  { id: 'compact', name: 'Компактно' },
+  { id: 'default', name: 'Обычно' },
+  { id: 'large', name: 'Крупно' },
+];
+
+function applyDensity(value) {
+  const next = DENSITIES.some((item) => item.id === value) ? value : 'default';
+  state.density = next;
+  document.documentElement.dataset.density = next;
+  localStorage.setItem('rustream.density', next);
+}
+
+(function initDensity() {
+  applyDensity(localStorage.getItem('rustream.density') || 'default');
 })();
 
 /** Persist the choice in the profile so every device follows it. */
@@ -1851,10 +2036,10 @@ function settingsBody(users) {
             <h5>Ключи приложения Last.fm</h5>
             <p class="muted small">Создайте приложение на last.fm/api/account/create. Ключи пишутся в config.toml и применяются сразу.</p>
             <label class="field"><span>API key</span>
-              <input class="input" id="settings-lastfm-api-key" value="${esc(lastfmConfig.apiKey || '')}" placeholder="32 символа" />
+              <input class="input" id="settings-lastfm-api-key" name="lastfm-api-key" autocomplete="off" autocapitalize="none" spellcheck="false" data-lpignore="true" value="${esc(lastfmConfig.apiKey || '')}" placeholder="32 символа" />
             </label>
             <label class="field"><span>API secret</span>
-              <input class="input" id="settings-lastfm-api-secret" type="password" placeholder="${lastfmConfig.apiSecretSet ? 'секрет уже сохранён — оставьте пустым' : 'секрет приложения'}" />
+              <input class="input" id="settings-lastfm-api-secret" name="lastfm-api-secret" type="password" autocomplete="new-password" data-lpignore="true" placeholder="${lastfmConfig.apiSecretSet ? 'секрет уже сохранён — оставьте пустым' : 'секрет приложения'}" />
             </label>
             <div class="settings-inline">
               <button class="btn tonal" data-settings-action="save-lastfm-app">Сохранить ключи приложения</button>
@@ -1862,10 +2047,10 @@ function settingsBody(users) {
             </div>
           </div>` : ''}
         <label class="field"><span>Last.fm session key (вручную)</span>
-          <input class="input" id="settings-lastfm-key" placeholder="оставьте пустым, чтобы не менять" />
+          <input class="input" id="settings-lastfm-key" name="lastfm-session-key" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="оставьте пустым, чтобы не менять" />
         </label>
         <label class="field"><span>ListenBrainz token</span>
-          <input class="input" id="settings-listenbrainz" placeholder="токен из listenbrainz.org/settings" />
+          <input class="input" id="settings-listenbrainz" name="listenbrainz-token" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="токен из listenbrainz.org/settings" />
         </label>
         <button class="btn tonal" data-settings-action="save-scrobbling">Сохранить скробблинг</button>
       </section>
@@ -1895,6 +2080,7 @@ function settingsBody(users) {
       ${state.me?.isAdmin ? `
       <section class="settings-section">
         <h4>${icon('person')} Пользователи</h4>
+        <p class="muted small">Новый человек может войти двумя способами: вы создаёте ему логин и пароль здесь, либо выдаёте код приглашения — блок «Приглашения» на странице профиля.</p>
         <div class="user-list" id="settings-user-list">
           ${(users || []).map((user) => `
             <div class="user-row">
@@ -2164,11 +2350,16 @@ function ytmCardHtml(status) {
   }
   return `
     <form id="ytm-connect-form" class="ytm-connect">
+      <ol class="steps">
+        <li>Откройте <a class="inline-link" href="https://music.youtube.com" target="_blank" rel="noreferrer">music.youtube.com</a> и войдите в аккаунт.</li>
+        <li>Установите расширение <strong>Cookie-Editor</strong> и нажмите <strong>Export → JSON</strong>.</li>
+        <li>Вставьте экспорт целиком в поле ниже — сервер сам разберёт формат.</li>
+      </ol>
       <label class="field"><span>Cookies music.youtube.com</span>
-        <textarea class="input" id="ytm-cookies" rows="5" spellcheck="false"
-          placeholder="Вставьте JSON из Cookie-Editor или строку вида SAPISID=…; __Secure-3PAPISID=…"></textarea>
+        <textarea class="input" id="ytm-cookies" rows="5" spellcheck="false" autocomplete="off"
+          placeholder='[{"name":"SAPISID","value":"…","domain":".youtube.com"}]  или  SAPISID=…; __Secure-3PAPISID=…'></textarea>
       </label>
-      <p class="muted small">Откройте music.youtube.com под своим аккаунтом, экспортируйте cookies (Cookie-Editor → Export → JSON) и вставьте сюда. Сервер проверит их, зашифрует и будет использовать только для вашего профиля.</p>
+      <p class="muted small">Нужны как минимум <code>SAPISID</code> и <code>__Secure-3PAPISID</code>. Cookies шифруются и используются только для вашего профиля.</p>
       <button class="btn primary" type="submit" id="ytm-connect-submit">${icon('check')} Подключить</button>
       <p class="form-error" id="ytm-connect-error" role="alert"></p>
     </form>`;
@@ -2278,7 +2469,7 @@ async function renderProfile(seq) {
     <div class="page profile-page">
       <header class="page-head">
         <div class="profile-identity">
-          <span class="user-avatar xl">${esc(initials(displayName()))}</span>
+          ${avatarHtml(displayName(), 'user-avatar xl')}
           <div>
             <h1>${esc(displayName())}</h1>
             <p class="muted">@${esc(state.me?.username || '')}${isAdmin ? ' · администратор' : ''}</p>
@@ -2305,6 +2496,17 @@ async function renderProfile(seq) {
         <h2>${icon('palette')} Оформление</h2>
         <p class="muted small">Тема сохраняется в аккаунте и применяется на всех устройствах.</p>
         ${themePickerHtml()}
+      </section>
+
+      <section class="section glass-card">
+        <h2>${icon('expand')} Плотность</h2>
+        <p class="muted small">Сколько строк и обложек помещается на экране.</p>
+        <div class="theme-mode-picker">
+          ${DENSITIES.map(
+            (item) =>
+              `<button class="mode-btn ${(state.density || 'default') === item.id ? 'active' : ''}" data-action="density" data-value="${item.id}">${item.name}</button>`,
+          ).join('')}
+        </div>
       </section>
 
       ${isAdmin ? invitesHtml(invites) : ''}
@@ -2385,6 +2587,11 @@ async function renderYtm(seq) {
     return;
   }
 
+  state.ytmLists = state.ytmLists || { history: [], liked: [], search: [] };
+
+  const ytmRow = (tracks, list) =>
+    trackList(tracks, { showCover: true, rowAction: 'play-ytm-row', rowList: list });
+
   $('#view').innerHTML = `
     <div class="page ytm-page">
       <header class="page-head">
@@ -2394,7 +2601,7 @@ async function renderYtm(seq) {
           <p class="muted">${esc(status.account?.name || 'Подключено')}${status.account?.handle ? ` · ${esc(status.account.handle)}` : ''}</p>
         </div>
         <div class="head-actions">
-          <button class="btn glass" data-action="ytm-liked">${icon('heart')} Мои лайки</button>
+          <button class="btn glass" data-action="ytm-liked">${icon('heart')} Обновить лайки</button>
         </div>
       </header>
 
@@ -2406,31 +2613,92 @@ async function renderYtm(seq) {
         <button class="btn primary" type="submit">${icon('search')} Искать</button>
       </form>
 
-      <section class="section" id="ytm-results">
-        <div class="empty-inline">Введите запрос или откройте свои лайки</div>
+      <div class="chip-row">
+        ${[
+          ['Новинки', 'новинки музыка 2026'],
+          ['Хиты', 'популярные песни'],
+          ['Русское', 'русская музыка'],
+          ['Электроника', 'electronic mix'],
+          ['Лоу-фай', 'lofi beats'],
+          ['Рок', 'rock classics'],
+          ['Джаз', 'jazz standards'],
+        ]
+          .map(
+            ([label, query]) =>
+              `<button class="chip-btn" data-action="ytm-preset" data-query="${esc(query)}">${label}</button>`,
+          )
+          .join('')}
+      </div>
+
+      <section class="section" id="ytm-results" hidden></section>
+
+      <section class="section" id="ytm-history-section" hidden>
+        <div class="section-head">
+          <div>
+            <h2>${icon('ytm')} Недавно из YouTube</h2>
+            <p class="muted">Всё, что вы уже искали или слушали — можно вернуться без нового поиска</p>
+          </div>
+        </div>
+        <div id="ytm-history"></div>
+      </section>
+
+      <section class="section" id="ytm-liked-section" hidden>
+        <div class="section-head">
+          <div>
+            <h2>${icon('heart')} Мои лайки</h2>
+            <p class="muted">Треки, которым вы поставили лайк в YouTube Music</p>
+          </div>
+        </div>
+        <div id="ytm-liked"></div>
+      </section>
+
+      <section class="section" id="ytm-empty" hidden>
+        <div class="empty-state">
+          <span class="empty-icon">${icon('ytm')}</span>
+          <h2>Пока пусто</h2>
+          <p>Найдите трек через поиск выше — он появится здесь и на главной.</p>
+        </div>
       </section>
     </div>`;
 
   const form = $('#ytm-search-form');
   const input = $('#ytm-search-input');
+  const results = $('#ytm-results');
+
+  const setSection = (id, list, tracks, emptyText) => {
+    const section = $(id);
+    if (!section) return;
+    const host = section.querySelector('div[id]') || section;
+    if (!tracks.length) {
+      section.hidden = emptyText ? false : true;
+      if (emptyText) host.innerHTML = `<div class="empty-inline">${esc(emptyText)}</div>`;
+      return;
+    }
+    section.hidden = false;
+    host.innerHTML = ytmRow(tracks, list);
+  };
 
   const show = (tracks, empty) => {
-    state.currentTracks = tracks;
-    $('#ytm-results').innerHTML = tracks.length
-      ? `<div class="section-head"><h2>${icon('ytm')} Результаты</h2><span class="muted small">${tracks.length}</span></div>${trackList(tracks, { showCover: true })}`
-      : `<div class="empty-inline">${empty}</div>`;
+    state.ytmLists.search = tracks;
+    results.hidden = false;
+    results.innerHTML = tracks.length
+      ? `<div class="section-head"><h2>${icon('search')} Результаты</h2><span class="muted small">${tracks.length}</span></div>${ytmRow(tracks, 'search')}`
+      : `<div class="empty-inline">${esc(empty)}</div>`;
+    $('#ytm-empty')?.setAttribute('hidden', '');
   };
 
   const search = async () => {
     const query = input.value.trim();
     if (!query) return;
-    $('#ytm-results').innerHTML = `<div class="empty-inline">Ищу на YouTube Music…</div>`;
+    results.hidden = false;
+    results.innerHTML = `<div class="skel-rows">${'<div class="skeleton skeleton-line"></div>'.repeat(5)}</div>`;
     try {
       const tracks = await api.ytmSearch(query);
       if (seq !== state.renderSeq) return;
       show(tracks, 'Ничего не найдено');
     } catch (error) {
-      if (!handleAuthError(error)) $('#ytm-results').innerHTML = `<div class="empty-inline">${esc(error.message)}</div>`;
+      if (handleAuthError(error)) return;
+      results.innerHTML = `<div class="empty-inline">${esc(error.message)}</div>`;
     }
   };
 
@@ -2446,7 +2714,24 @@ async function renderYtm(seq) {
       if (input.value.trim().length >= 2) search();
     }, 500);
   });
-  input.focus();
+
+  // Главная вкладки: история из локальной БД + лайки из YouTube.
+  (async () => {
+    const [history, liked] = await Promise.allSettled([api.ytmHistory(40), api.ytmLiked(50)]);
+    if (seq !== state.renderSeq) return;
+
+    if (history.status === 'fulfilled' && history.value.length) {
+      state.ytmLists.history = history.value;
+      setSection('#ytm-history-section', 'history', history.value);
+    }
+    if (liked.status === 'fulfilled' && liked.value.length) {
+      state.ytmLists.liked = liked.value;
+      setSection('#ytm-liked-section', 'liked', liked.value);
+    }
+
+    const nothing = !state.ytmLists.history.length && !state.ytmLists.liked.length;
+    if (nothing) $('#ytm-empty').hidden = false;
+  })();
 }
 
 // ---------------------------------------------------------------------------
@@ -2467,6 +2752,15 @@ document.addEventListener('click', async (event) => {
     if (event.target.closest('[data-action="like"], [data-action="dislike"], [data-action="add-to-playlist"]')) return;
     setLiveMode(false);
     await player.playTracks(state.currentTracks, index);
+    return;
+  }
+  if (action === 'play-ytm-row') {
+    const index = Number(actionEl.dataset.index);
+    if (event.target.closest('[data-action="like"], [data-action="dislike"], [data-action="add-to-playlist"]')) return;
+    const list = state.ytmLists?.[actionEl.dataset.list];
+    if (!list?.length) return;
+    setLiveMode(false);
+    await player.playTracks(list, index);
     return;
   }
   if (action === 'play-all') {
@@ -2516,6 +2810,14 @@ document.addEventListener('click', async (event) => {
     toast(`Режим: ${mode === 'dark' ? 'тёмный' : mode === 'light' ? 'светлый' : 'системный'}`);
     return;
   }
+  if (action === 'density') {
+    const value = actionEl.dataset.value;
+    applyDensity(value);
+    $$('[data-action="density"]').forEach((item) =>
+      item.classList.toggle('active', item.dataset.value === value),
+    );
+    return;
+  }
   if (action === 'logout') {
     await api.logout().catch(() => {});
     location.reload();
@@ -2539,19 +2841,48 @@ document.addEventListener('click', async (event) => {
     route();
     return;
   }
-  if (action === 'ytm-liked') {
+  if (action === 'ytm-preset') {
+    const query = actionEl.dataset.query || '';
+    if (!query) return;
     const results = $('#ytm-results');
-    if (results) results.innerHTML = `<div class="empty-inline">Загружаю лайки…</div>`;
+    if (results) {
+      results.hidden = false;
+      results.innerHTML = `<div class="empty-inline">Ищу «${esc(query)}»…</div>`;
+    }
     try {
-      const tracks = await api.ytmLiked(200);
-      state.currentTracks = tracks;
+      const tracks = await api.ytmSearch(query);
+      state.ytmLists = state.ytmLists || {};
+      state.ytmLists.search = tracks;
       if (results) {
         results.innerHTML = tracks.length
-          ? `<div class="section-head"><h2>${icon('heart')} Мои лайки</h2><span class="muted small">${tracks.length}</span></div>${trackList(tracks, { showCover: true })}`
-          : '<div class="empty-inline">В YouTube Music пока нет лайков</div>';
+          ? `<div class="section-head"><h2>${icon('search')} ${esc(query)}</h2><span class="muted small">${tracks.length}</span></div>${trackList(
+              tracks,
+              { showCover: true, rowAction: 'play-ytm-row', rowList: 'search' },
+            )}`
+          : `<div class="empty-inline">Ничего не найдено</div>`;
       }
     } catch (error) {
       if (results) results.innerHTML = `<div class="empty-inline">${esc(error.message)}</div>`;
+    }
+    return;
+  }
+  if (action === 'ytm-liked') {
+    const section = $('#ytm-liked-section');
+    const host = $('#ytm-liked');
+    if (host) host.innerHTML = `<div class="empty-inline">Загружаю лайки…</div>`;
+    try {
+      const tracks = await api.ytmLiked(200);
+      state.ytmLists = state.ytmLists || {};
+      state.ytmLists.liked = tracks;
+      if (section) section.hidden = false;
+      if (host) {
+        host.innerHTML = tracks.length
+          ? trackList(tracks, { showCover: true, rowAction: 'play-ytm-row', rowList: 'liked' })
+          : '<div class="empty-inline">В YouTube Music пока нет лайков</div>';
+      }
+      toast(`Лайков: ${tracks.length}`);
+    } catch (error) {
+      if (host) host.innerHTML = `<div class="empty-inline">${esc(error.message)}</div>`;
     }
     return;
   }

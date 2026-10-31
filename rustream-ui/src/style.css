@@ -117,6 +117,10 @@ body[data-theme='ocean'] {
   --primary-container: #1d3f52;
   --on-primary-container: #d6efff;
   --secondary: #8fcbb8;
+  --surface: #0e1317;
+  --surface-container: #131a20;
+  --surface-container-high: #18222a;
+  --surface-container-highest: #1d2933;
 }
 body[data-theme='sunset'] {
   --primary: #e8a07a;
@@ -124,6 +128,10 @@ body[data-theme='sunset'] {
   --primary-container: #4f2c18;
   --on-primary-container: #ffe2d3;
   --secondary: #d7b98a;
+  --surface: #150f0c;
+  --surface-container: #1c1512;
+  --surface-container-high: #241b17;
+  --surface-container-highest: #2c211c;
 }
 body[data-theme='forest'] {
   --primary: #a9cf9a;
@@ -131,6 +139,10 @@ body[data-theme='forest'] {
   --primary-container: #2f4526;
   --on-primary-container: #d9f5cc;
   --secondary: #d9c98f;
+  --surface: #0e110d;
+  --surface-container: #131711;
+  --surface-container-high: #181e15;
+  --surface-container-highest: #1e251a;
 }
 body[data-theme='mono'] {
   --primary: #d8d5cf;
@@ -138,6 +150,35 @@ body[data-theme='mono'] {
   --primary-container: #3a3a3d;
   --on-primary-container: #f2f0ec;
   --secondary: #b9b6b0;
+  --surface: #111111;
+  --surface-container: #171717;
+  --surface-container-high: #1e1e1e;
+  --surface-container-highest: #262626;
+}
+
+html.light-mode body[data-theme='ocean'] {
+  --surface: #f7fafc;
+  --surface-container: #edf3f7;
+  --surface-container-high: #e4edf2;
+  --surface-container-highest: #dbe7ee;
+}
+html.light-mode body[data-theme='sunset'] {
+  --surface: #fcf8f5;
+  --surface-container: #f6ece6;
+  --surface-container-high: #f0e2d9;
+  --surface-container-highest: #e9d8cd;
+}
+html.light-mode body[data-theme='forest'] {
+  --surface: #f8faf6;
+  --surface-container: #eef3ea;
+  --surface-container-high: #e6ede1;
+  --surface-container-highest: #dde7d7;
+}
+html.light-mode body[data-theme='mono'] {
+  --surface: #fafafa;
+  --surface-container: #f0f0f0;
+  --surface-container-high: #e9e9e9;
+  --surface-container-highest: #e1e1e1;
 }
 body[data-theme='custom'] {
   --primary-container: color-mix(in srgb, var(--primary) 26%, var(--surface-container));
@@ -450,10 +491,21 @@ h3 {
   width: 28px;
   height: 28px;
   border-radius: 50%;
+  overflow: hidden;
   background: var(--primary-container);
   color: var(--on-primary-container);
   font-size: 12px;
   font-weight: 600;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar.has-photo {
+  background: var(--surface-container-highest);
 }
 
 .user-avatar.xl {
@@ -826,6 +878,51 @@ h3 {
   border: 1px solid var(--outline-variant);
   border-radius: var(--shape-xs);
   padding: 1px 5px;
+}
+
+.track-badge.ytm {
+  color: var(--on-secondary-container);
+  background: var(--secondary-container);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.track-badge.inline {
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+/* --- Search row (YouTube Music) ------------------------------------------- */
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.search-row .searchbox {
+  flex: 1;
+  max-width: none;
+  background: var(--surface-container-high);
+}
+
+.skel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.chip-row:empty {
+  display: none;
 }
 
 /* --- Inputs --------------------------------------------------------------- */
@@ -2492,8 +2589,8 @@ textarea.input {
 }
 
 .volume input[type='range'] {
-  width: 92px;
-  height: 16px;
+  width: 104px;
+  height: 20px;
   appearance: none;
   -webkit-appearance: none;
   background: none;
@@ -2503,30 +2600,38 @@ textarea.input {
 .volume input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: var(--shape-full);
-  background: var(--surface-container-highest);
+  background: var(--outline);
 }
 
+/* Ползунок виден всегда: иначе непонятно, где начало, где конец. */
 .volume input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -4px;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
   border-radius: 50%;
-  background: var(--on-surface);
+  background: var(--primary);
+  border: 2px solid var(--surface-container);
+  box-shadow: var(--elev-1);
+  transition: transform var(--dur) var(--ease);
+}
+
+.volume input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.15);
 }
 
 .volume input[type='range']::-moz-range-track {
   height: 4px;
   border-radius: var(--shape-full);
-  background: var(--surface-container-highest);
+  background: var(--outline);
 }
 
 .volume input[type='range']::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--surface-container);
   border-radius: 50%;
-  background: var(--on-surface);
+  background: var(--primary);
 }
 
 /* --- Now playing sheet --------------------------------------------------- */
@@ -2674,6 +2779,33 @@ textarea.input {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+.np-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+
+.np-controls .icon-btn {
+  width: 44px;
+  height: 44px;
+}
+
+.np-controls .play-btn {
+  width: 56px;
+  height: 56px;
+  margin: 0 4px;
+}
+
+.np-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .np-panel {
@@ -3606,6 +3738,75 @@ body.modal-open #view {
     opacity: 1;
     transform: none;
   }
+}
+
+/* --- Steps (инструкция подключения) -------------------------------------- */
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding-left: 20px;
+  list-style: decimal;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.steps li::marker {
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.steps code,
+.muted code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: var(--shape-xs);
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+}
+
+/* --- Density (плотность интерфейса) -------------------------------------- */
+
+html[data-density='compact'] {
+  --topbar-h: 52px;
+  --rail-w: 76px;
+  --player-h: 72px;
+  --tabbar-h: 56px;
+}
+html[data-density='compact'] .page {
+  padding: 18px 24px 36px;
+}
+html[data-density='compact'] .track-row {
+  height: 44px;
+}
+html[data-density='compact'] .grid.cards {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px 12px;
+}
+html[data-density='compact'] .section {
+  margin-bottom: 28px;
+}
+
+html[data-density='large'] {
+  --topbar-h: 68px;
+  --rail-w: 104px;
+  --player-h: 96px;
+  --tabbar-h: 68px;
+}
+html[data-density='large'] .page {
+  padding: 36px 40px 56px;
+}
+html[data-density='large'] .track-row {
+  height: 62px;
+}
+html[data-density='large'] .grid.cards {
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+}
+html[data-density='large'] body {
+  font-size: 15px;
 }
 
 /* --- Motion preferences -------------------------------------------------- */

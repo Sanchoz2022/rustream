@@ -72,8 +72,18 @@ pub fn parse(input: &str) -> Result<Vec<Cookie>> {
     }
 
     if sapisid(&cookies).is_none() {
+        let found = if cookies.is_empty() {
+            "ни одного подходящего cookie".to_string()
+        } else {
+            cookies
+                .iter()
+                .map(|cookie| cookie.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         return Err(anyhow!(
-            "Не найден cookie SAPISID: экспортируйте cookies с music.youtube.com после входа в аккаунт"
+            "В экспорте нет SAPISID / __Secure-3PAPISID (найдено: {found}). \
+             Экспорт нужно делать на youtube.com или music.youtube.com, уже войдя в аккаунт."
         ));
     }
     Ok(cookies)
@@ -93,14 +103,28 @@ fn parse_json(input: &str) -> Result<Vec<Cookie>> {
         serde_json::from_str(input).map_err(|error| anyhow!("Некорректный JSON: {error}"))?
     };
 
-    Ok(items
+    // Одинаковые имена встречаются и на .google.com, и на .youtube.com.
+    // Для music.youtube.com предпочтительнее youtube-версия, поэтому она
+    // идёт первой и выигрывает дедупликацию ниже.
+    let mut items: Vec<(bool, Cookie)> = items
         .into_iter()
-        .filter(|item| item.domain.as_deref().is_none_or(is_youtube_domain))
-        .map(|item| Cookie {
-            name: item.name.trim().to_string(),
-            value: item.value.trim().to_string(),
+        .filter(|item| item.domain.as_deref().is_none_or(is_google_domain))
+        .map(|item| {
+            let on_youtube = item
+                .domain
+                .as_deref()
+                .is_some_and(|domain| !is_google_domain(domain) || domain.contains("youtube"));
+            (
+                on_youtube,
+                Cookie {
+                    name: item.name.trim().to_string(),
+                    value: item.value.trim().to_string(),
+                },
+            )
         })
-        .collect())
+        .collect();
+    items.sort_by_key(|(on_youtube, _)| !*on_youtube);
+    Ok(items.into_iter().map(|(_, cookie)| cookie).collect())
 }
 
 fn is_netscape_line(line: &str) -> bool {
@@ -108,21 +132,26 @@ fn is_netscape_line(line: &str) -> bool {
 }
 
 fn parse_netscape(input: &str) -> Vec<Cookie> {
-    input
+    let mut items: Vec<(bool, Cookie)> = input
         .lines()
         .filter(|line| !line.starts_with('#') || line.starts_with("#HttpOnly_"))
         .filter_map(|line| {
             let line = line.strip_prefix("#HttpOnly_").unwrap_or(line);
             let fields: Vec<&str> = line.split('\t').collect();
-            if fields.len() < 7 || !is_youtube_domain(fields[0]) {
+            if fields.len() < 7 || !is_google_domain(fields[0]) {
                 return None;
             }
-            Some(Cookie {
-                name: fields[5].trim().to_string(),
-                value: fields[6].trim().to_string(),
-            })
+            Some((
+                fields[0].contains("youtube"),
+                Cookie {
+                    name: fields[5].trim().to_string(),
+                    value: fields[6].trim().to_string(),
+                },
+            ))
         })
-        .collect()
+        .collect();
+    items.sort_by_key(|(on_youtube, _)| !*on_youtube);
+    items.into_iter().map(|(_, cookie)| cookie).collect()
 }
 
 fn parse_header(input: &str) -> Vec<Cookie> {
@@ -142,9 +171,17 @@ fn parse_header(input: &str) -> Vec<Cookie> {
         .collect()
 }
 
-fn is_youtube_domain(domain: &str) -> bool {
+/// Google держит `SAPISID`/`SID` на `.google.com`, а `__Secure-3P*` — на
+/// `.youtube.com`. Фильтр по одному youtube.com выбрасывал половину сессии,
+/// поэтому принимаем оба домена: список KEEP и так ограничен авторизацией.
+fn is_google_domain(domain: &str) -> bool {
     let domain = domain.trim().trim_start_matches('.');
-    domain == "youtube.com" || domain.ends_with(".youtube.com")
+    domain == "youtube.com"
+        || domain.ends_with(".youtube.com")
+        || domain == "google.com"
+        || domain.ends_with(".google.com")
+        || domain == "googleusercontent.com"
+        || domain.ends_with(".googleusercontent.com")
 }
 
 /// Value used for the `SAPISIDHASH` authorization header.
@@ -228,6 +265,28 @@ mod tests {
         assert!(parse("SID=1; HSID=2").is_err());
         assert!(parse("   ").is_err());
         assert!(parse("[not json").is_err());
+    }
+
+    #[test]
+    fn parses_cookie_editor_export_with_google_domains() {
+        // Реальный экспорт Cookie-Editor: SAPISID лежит на .google.com,
+        // __Secure-3PAPISID — на .youtube.com. Раньше google-домены
+        // отбрасывались, и подключение падало с «не найден SAPISID».
+        let text = r#"[
+          {"domain":".google.com","expirationDate":1793473639.5,"hostOnly":false,
+           "httpOnly":true,"name":"SAPISID","path":"/","sameSite":"no_restriction",
+           "secure":true,"session":false,"storeId":"0","value":"sapi"},
+          {"domain":".youtube.com","expirationDate":1793473639.5,"hostOnly":false,
+           "httpOnly":true,"name":"__Secure-3PAPISID","path":"/","sameSite":"none",
+           "secure":true,"session":false,"storeId":"0","value":"p3"},
+          {"domain":".youtube.com","expirationDate":1793473639.5,"hostOnly":false,
+           "httpOnly":true,"name":"SID","path":"/","sameSite":"none",
+           "secure":true,"session":false,"storeId":"0","value":"sid"}
+        ]"#;
+        let cookies = parse(text).unwrap();
+        assert_eq!(sapisid(&cookies), Some("sapi"));
+        assert!(cookies.iter().any(|c| c.name == "__Secure-3PAPISID"));
+        assert!(cookies.iter().any(|c| c.name == "SID"));
     }
 
     #[test]

@@ -253,8 +253,46 @@ async fn remember(db: &SqlitePool, user_id: &str, songs: &[Song]) -> Result<()> 
     Ok(())
 }
 
-fn song_json(song: &Song) -> Value {
-    let id = format!("{ID_PREFIX}{}", song.video_id);
+/// Треки YouTube, которые этот профиль уже слушал или находил.
+/// Живёт в локальной БД, поэтому доступен без похода в YouTube —
+/// это и есть «главная» вкладки YouTube до первого поиска.
+pub async fn history(db: &SqlitePool, user_id: &str, limit: usize) -> Result<Vec<Value>> {
+    let rows: Vec<(String, String, String, String, i64)> = sqlx::query_as(
+        "SELECT video_id, title, artist, album, duration_ms
+         FROM ytm_tracks
+         WHERE user_id = ?
+         ORDER BY last_used_at DESC
+         LIMIT ?",
+    )
+    .bind(user_id)
+    .bind(limit as i64)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(video_id, title, artist, album, duration_ms)| {
+            let id = format!("{ID_PREFIX}{video_id}");
+            json!({
+                "id": id,
+                "parent": "",
+                "isDir": false,
+                "title": title,
+                "album": album,
+                "artist": artist,
+                "coverArt": id,
+                "duration": duration_ms / 1000,
+                "suffix": "m4a",
+                "contentType": "audio/mp4",
+                "isVideo": false,
+                "type": "music",
+                "source": "ytm",
+            })
+        })
+        .collect())
+}
+
+fn song_json(song: &Song) -> Value {    let id = format!("{ID_PREFIX}{}", song.video_id);
     json!({
         "id": id,
         "parent": "",
@@ -428,37 +466,26 @@ async fn resolve(
     }
 
     let cookie_file = write_cookie_file(cookies).await?;
-    let mut command = tokio::process::Command::new(&config.ytdlp_path);
-    command.args([
-        "--quiet",
-        "--no-warnings",
-        "--no-playlist",
-        "--no-cache-dir",
-        // Fail fast when the CDN is unreachable instead of hanging the player.
-        "--socket-timeout",
-        "15",
-        "-f",
-        "bestaudio[ext=m4a]/bestaudio",
-        "-O",
-        "%(.{url,ext,filesize,filesize_approx})j",
-        "--cookies",
-    ]);
-    command.arg(&cookie_file);
-    if let Some(proxy) = config
-        .ytm_proxy
-        .as_deref()
-        .filter(|proxy| !proxy.trim().is_empty())
-    {
-        command.arg("--proxy").arg(proxy);
-    }
-    command.arg(format!("https://music.youtube.com/watch?v={video_id}"));
-    command.kill_on_drop(true);
-    let output = tokio::time::timeout(YTDLP_TIMEOUT, command.output()).await;
+    let attempt = run_ytdlp(config, video_id, Some(&cookie_file)).await;
     tokio::fs::remove_file(&cookie_file).await.ok();
 
-    let output = output
-        .map_err(|_| anyhow!("yt-dlp timed out"))?
-        .map_err(|error| anyhow!("cannot run {}: {error}", config.ytdlp_path))?;
+    // Cookies из профиля могут протухнуть (SAPISID живёт месяцами, но легко
+    // инвалидируется сменой пароля/выходом из аккаунта). Тогда yt-dlp падает
+    // на авторизации, хотя публичный трек прекрасно резолвится анонимно.
+    // Поэтому вторая попытка — без cookies: пользователь получает звук, а не 502.
+    let output = match attempt {
+        Ok(output) => output,
+        Err(first) => {
+            if cookies.is_empty() {
+                return Err(first);
+            }
+            tracing::warn!(
+                "YouTube Music: cookies профиля не сработали ({first}); повторяю без cookies"
+            );
+            run_ytdlp(config, video_id, None).await?
+        }
+    };
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow!("yt-dlp failed: {}", stderr.trim()));
@@ -508,8 +535,46 @@ async fn probe_size(client: &reqwest::Client, url: &str) -> Option<u64> {
 
 /// yt-dlp reads cookies only from a file. It lives for one invocation and is
 /// readable by the server user only.
-async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {
-    let path =
+/// Один запуск yt-dlp. `cookies` = `None` → анонимный резолв.
+async fn run_ytdlp(
+    config: &Config,
+    video_id: &str,
+    cookies: Option<&Path>,
+) -> Result<std::process::Output> {
+    let mut command = tokio::process::Command::new(&config.ytdlp_path);
+    command.args([
+        "--quiet",
+        "--no-warnings",
+        "--no-playlist",
+        "--no-cache-dir",
+        // Fail fast when the CDN is unreachable instead of hanging the player.
+        "--socket-timeout",
+        "15",
+        "-f",
+        "bestaudio[ext=m4a]/bestaudio",
+        "-O",
+        "%(.{url,ext,filesize,filesize_approx})j",
+    ]);
+    if let Some(path) = cookies {
+        command.arg("--cookies").arg(path);
+    }
+    if let Some(proxy) = config
+        .ytm_proxy
+        .as_deref()
+        .filter(|proxy| !proxy.trim().is_empty())
+    {
+        command.arg("--proxy").arg(proxy);
+    }
+    command.arg(format!("https://music.youtube.com/watch?v={video_id}"));
+    command.kill_on_drop(true);
+
+    tokio::time::timeout(YTDLP_TIMEOUT, command.output())
+        .await
+        .map_err(|_| anyhow!("yt-dlp timed out"))?
+        .map_err(|error| anyhow!("cannot run {}: {error}", config.ytdlp_path))
+}
+
+async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {    let path =
         std::env::temp_dir().join(format!("rustream-ytm-{}.txt", crate::auth::random_hex(12)));
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true).create_new(true).mode(0o600);

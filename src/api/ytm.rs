@@ -147,3 +147,17 @@ pub async fn api_liked(
     let limit = limit(&params);
     listing(state, user.user_id, Listing::Liked, limit).await
 }
+
+/// Уже известные этому профилю треки YouTube (локальная БД, без сети).
+pub async fn api_history(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Extension(user): Extension<AuthUser>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let limit = limit(&params);
+    let db = super::db(&state).await;
+    match ytm::history(&db, &user.user_id, limit).await {
+        Ok(tracks) => Json(json!({ "tracks": tracks })).into_response(),
+        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    }
+}
