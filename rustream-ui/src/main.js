@@ -393,7 +393,7 @@ function trackRow(track, index, { showAlbum = true, showCover = false, playlistI
   const isPlaying = player.track?.id === track.id;
   const liked = state.favorites.has(track.id);
   const number = track.track && track.track > 0 ? track.track : index + 1;
-  return `<div class="track-row ${isPlaying ? 'playing' : ''}" data-action="play-row" data-index="${index}" tabindex="0">
+  return `<div class="track-row ${isPlaying ? 'playing' : ''} ${showCover ? 'has-cover' : ''}" data-action="play-row" data-index="${index}" tabindex="0">
     <div class="track-index">
       <span class="track-num">${number}</span>
       <span class="track-eq"><i></i><i></i><i></i></span>
