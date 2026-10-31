@@ -162,8 +162,7 @@ root.innerHTML = `
 
   <nav class="tabbar" aria-label="Основное меню">
     <a href="#/home" data-tab="home" class="tab-item"><span class="tab-icon">${icon('home')}</span><span class="tab-label">Главная</span></a>
-    <a href="#/live" data-tab="live" class="tab-item"><span class="tab-icon">${icon('radio')}</span><span class="tab-label">Live</span></a>
-    <a href="#/ytm" data-tab="ytm" class="tab-item"><span class="tab-icon">${icon('ytm')}</span><span class="tab-label">YouTube</span></a>
+    <a href="#/search" data-tab="search" class="tab-item"><span class="tab-icon">${icon('search')}</span><span class="tab-label">Поиск</span></a>
     <a href="#/library" data-tab="library" class="tab-item"><span class="tab-icon">${icon('album')}</span><span class="tab-label">Медиатека</span></a>
     <a href="#/profile" data-tab="profile" class="tab-item"><span class="tab-icon">${icon('person')}</span><span class="tab-label">Профиль</span></a>
   </nav>
@@ -219,7 +218,10 @@ root.innerHTML = `
           </label>
           <label class="field">
             <span>Пароль</span>
-            <input class="input" id="login-password" name="password" type="password" autocomplete="current-password" required />
+            <span class="input-wrap">
+              <input class="input" id="login-password" name="password" type="password" autocomplete="current-password" required />
+              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="login-password" aria-label="Показать пароль">${icon('eye')}</button>
+            </span>
           </label>
           <button class="btn primary full" type="submit" id="login-submit">${icon('wave')} Войти</button>
           <p class="auth-error" id="login-error" role="alert"></p>
@@ -246,7 +248,10 @@ root.innerHTML = `
           </label>
           <label class="field">
             <span>Пароль</span>
-            <input class="input" id="register-password" type="password" autocomplete="new-password" minlength="6" required />
+            <span class="input-wrap">
+              <input class="input" id="register-password" type="password" autocomplete="new-password" minlength="6" required />
+              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="register-password" aria-label="Показать пароль">${icon('eye')}</button>
+            </span>
           </label>
           <button class="btn primary full" type="submit" id="register-submit">${icon('sparkle')} Зарегистрироваться</button>
           <p class="auth-error" id="register-error" role="alert"></p>
@@ -456,7 +461,7 @@ function setActiveNav(section) {
     const on =
       tab === active ||
       (tab === 'library' && (active === 'library' || LIBRARY_SECTIONS.has(active))) ||
-      (tab === 'home' && active === 'search');
+      (tab === 'search' && active === 'search');
     item.classList.toggle('active', on);
   });
 }
@@ -1059,16 +1064,86 @@ async function renderFavorites(seq) {
     </div>`;
 }
 
+const SEARCH_HISTORY_KEY = 'rustream.searches';
+
+function recentSearches() {
+  try {
+    const list = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY));
+    return Array.isArray(list) ? list.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSearch(query) {
+  const value = String(query || '').trim();
+  if (value.length < 2) return;
+  const list = [value, ...recentSearches().filter((item) => item !== value)].slice(0, 8);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list));
+}
+
+function runPageSearch(query) {
+  const value = String(query || '').trim();
+  if (!value) return;
+  rememberSearch(value);
+  const target = `#/search?q=${encodeURIComponent(value)}`;
+  if (location.hash === target) route();
+  else location.hash = target;
+}
+
 async function renderSearch(seq, query) {
   const input = $('#search-input');
   if (input.value !== query) input.value = query;
 
   if (!query.trim()) {
+    const recent = recentSearches();
     $('#view').innerHTML = `
-      <div class="page">
-        <div class="empty-state"><span class="empty-icon">${icon('search')}</span>
-        <h2>Найдите что послушать</h2><p>Введите название трека, альбома или артиста.</p></div>
+      <div class="page search-page">
+        <header class="page-head">
+          <div>
+            <span class="eyebrow">Поиск</span>
+            <h1>Что найти?</h1>
+          </div>
+        </header>
+
+        <form id="page-search-form" class="search-row">
+          <label class="searchbox">
+            ${icon('search')}
+            <input id="page-search-input" type="search" placeholder="Треки, альбомы, артисты…" enterkeyhint="search" autocomplete="off" />
+          </label>
+          <button class="btn primary" type="submit">${icon('search')} Искать</button>
+        </form>
+
+        ${
+          recent.length
+            ? `<section class="section">
+                <div class="section-head"><h2>Недавние запросы</h2><button class="text-link" data-action="clear-searches">Очистить</button></div>
+                <div class="chip-row">${recent
+                  .map((q) => `<button class="chip-btn" data-action="run-search" data-query="${esc(q)}">${esc(q)}</button>`)
+                  .join('')}</div>
+              </section>`
+            : ''
+        }
+
+        <section class="section">
+          <div class="section-head"><h2>Популярное</h2></div>
+          <div class="chip-row">
+            ${['Chiki The Maid', 'Intro', 'Poezd', 'FLAC', 'Аниме', 'Рок', 'Джаз']
+              .map((q) => `<button class="chip-btn" data-action="run-search" data-query="${esc(q)}">${esc(q)}</button>`)
+              .join('')}
+          </div>
+        </section>
       </div>`;
+
+    const form = $('#page-search-form');
+    const pageInput = $('#page-search-input');
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      runPageSearch(pageInput.value);
+    });
+    pageInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') runPageSearch(pageInput.value);
+    });
     return;
   }
 
@@ -1456,14 +1531,22 @@ function renderEqPanel(panel) {
       <button class="chip-btn ${eq.preset === 'custom' ? 'active' : ''}" disabled>Своя</button>
     </div>
     <div class="eq ${eq.enabled ? '' : 'disabled'}">
-      ${EQ_BANDS.map(
-        (frequency, index) => `
+      ${EQ_BANDS.map((frequency, index) => {
+        const gain = Number(eq.gains[index]) || 0;
+        const pct = ((12 - gain) / 24) * 100;
+        return `
         <div class="eq-band">
-          <span class="eq-value" id="eq-val-${index}">${eq.gains[index] > 0 ? '+' : ''}${eq.gains[index]}</span>
-          <input type="range" orient="vertical" class="eq-slider" data-eq-band="${index}" min="-12" max="12" step="1" value="${eq.gains[index]}" />
+          <span class="eq-value" id="eq-val-${index}">${gain > 0 ? '+' : ''}${gain}</span>
+          <div class="eq-track" data-eq-band="${index}" role="slider" tabindex="0"
+               aria-label="${frequency >= 1000 ? `${frequency / 1000} кГц` : `${frequency} Гц`}"
+               aria-valuemin="-12" aria-valuemax="12" aria-valuenow="${gain}">
+            <span class="eq-center"></span>
+            <span class="eq-fill" style="top:${Math.min(pct, 50)}%;height:${Math.abs(50 - pct)}%"></span>
+            <span class="eq-thumb" style="top:${pct}%"></span>
+          </div>
           <span class="eq-freq">${frequency >= 1000 ? `${frequency / 1000}k` : frequency}</span>
-        </div>`,
-      ).join('')}
+        </div>`;
+      }).join('')}
     </div>
     <div class="eq-foot">
       <span class="muted">10 полос · ±12 дБ</span>
@@ -1777,6 +1860,7 @@ async function bootstrap() {
     hideLogin();
     await Promise.all([loadFavorites(), loadMeStats()]);
     restorePlayback();
+    await syncPlayerFromServer();
     route();
   } catch (error) {
     if (!isAuthError(error)) console.error(error);
@@ -1788,6 +1872,59 @@ function setLiveMode(value) {
   state.liveMode = !!value;
   player.setLiveMode(!!value);
 }
+
+// --- Синхронизация очереди между устройствами --------------------------------
+// Раньше очередь жила только в localStorage: на телефоне и ноутбуке были
+// разные треки. Теперь снимок состояния лежит на сервере у профиля.
+
+let playerPushTimer = null;
+
+function pushPlayerState() {
+  if (!state.me || !player.queue.length) return;
+  clearTimeout(playerPushTimer);
+  playerPushTimer = setTimeout(() => {
+    api.savePlayerState(player.snapshotState()).catch(() => {});
+  }, 3000);
+}
+
+async function syncPlayerFromServer() {
+  let remote;
+  try {
+    remote = await api.getPlayerState();
+  } catch {
+    return;
+  }
+  const remoteAt = Number(remote?.updatedAt) || 0;
+  if (!remote?.state?.queue?.length) return;
+  // Локальное состояние свежее — не затираем то, что человек слушает сейчас.
+  if (remoteAt <= player.localUpdatedAt()) return;
+  if (remote.state.updatedAt && remote.state.updatedAt > remoteAt) return;
+
+  const applied = player.applyRemote(remote.state);
+  if (!applied) return;
+  state.liveMode = !!applied.liveMode;
+  updateTrackUi();
+  updatePlayState();
+  updateTimeUi();
+  if (location.hash.startsWith('#/live')) route();
+}
+
+// Отправляем состояние, когда трек/очередь реально меняются, и при уходе.
+player.addEventListener('track', pushPlayerState);
+player.addEventListener('queue', pushPlayerState);
+window.addEventListener('pagehide', () => {
+  if (!state.me || !player.queue.length) return;
+  try {
+    fetch('/api/me/player', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state: player.snapshotState() }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* страница закрывается — молча */
+  }
+});
 
 function restorePlayback() {
   const saved = player.restore();
@@ -2021,7 +2158,24 @@ function settingsBody(users) {
 
       <section class="settings-section">
         <h4>${icon('radio')} Скробблинг</h4>
-        <p class="muted small">Статистика хранится локально. Last.fm и ListenBrainz получают данные, если подключены.</p>
+        <p class="muted small">История и статистика пишутся локально всегда. Внешние сервисы получают прослушивания только после подключения.</p>
+        <div class="settings-sub">
+          <h5>ListenBrainz — проще всего</h5>
+          <p class="muted small">Бесплатно, без модерации и ключей приложения: нужен только личный токен.</p>
+          <ol class="steps">
+            <li>Откройте <a class="inline-link" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">listenbrainz.org/settings</a> и войдите.</li>
+            <li>Скопируйте «User token».</li>
+            <li>Вставьте его в поле ниже и сохраните.</li>
+          </ol>
+          <label class="field"><span>ListenBrainz token</span>
+            <input class="input" id="settings-listenbrainz" name="listenbrainz-token" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="токен из listenbrainz.org/settings" />
+          </label>
+          <button class="btn primary" data-settings-action="save-scrobbling" data-scope="listenbrainz">${icon('check')} Сохранить токен</button>
+        </div>
+
+        <div class="settings-sub">
+          <h5>Last.fm</h5>
+          <p class="muted small">Тоже бесплатно, но серверу нужны ключи приложения — их создаёт администратор один раз.</p>
         <div class="settings-status">
           <span class="status-dot ${settings.lastfmConnected ? 'on' : ''}"></span>
           Last.fm: ${settings.lastfmConnected ? `подключён${settings.lastfmUsername ? ` как ${esc(settings.lastfmUsername)}` : ''}` : 'не подключён'}
@@ -2049,20 +2203,24 @@ function settingsBody(users) {
         <label class="field"><span>Last.fm session key (вручную)</span>
           <input class="input" id="settings-lastfm-key" name="lastfm-session-key" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="оставьте пустым, чтобы не менять" />
         </label>
-        <label class="field"><span>ListenBrainz token</span>
-          <input class="input" id="settings-listenbrainz" name="listenbrainz-token" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="токен из listenbrainz.org/settings" />
-        </label>
-        <button class="btn tonal" data-settings-action="save-scrobbling">Сохранить скробблинг</button>
+        <button class="btn tonal" data-settings-action="save-scrobbling" data-scope="lastfm">Сохранить Last.fm</button>
+        </div>
       </section>
 
       <section class="settings-section">
         <h4>${icon('settings')} Безопасность</h4>
         <form id="settings-password-form" class="settings-form">
           <label class="field"><span>Текущий пароль</span>
-            <input class="input" id="settings-current-password" type="password" autocomplete="current-password" />
+            <span class="input-wrap">
+              <input class="input" id="settings-current-password" type="password" autocomplete="current-password" />
+              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="settings-current-password" aria-label="Показать пароль">${icon('eye')}</button>
+            </span>
           </label>
           <label class="field"><span>Новый пароль</span>
-            <input class="input" id="settings-new-password" type="password" autocomplete="new-password" />
+            <span class="input-wrap">
+              <input class="input" id="settings-new-password" type="password" autocomplete="new-password" />
+              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="settings-new-password" aria-label="Показать пароль">${icon('eye')}</button>
+            </span>
           </label>
           <button class="btn tonal" type="submit">Сменить пароль</button>
         </form>
@@ -2091,7 +2249,12 @@ function settingsBody(users) {
         </div>
         <div class="settings-form user-create">
           <label class="field"><span>Логин</span><input class="input" id="new-user-name" autocapitalize="none" /></label>
-          <label class="field"><span>Пароль</span><input class="input" id="new-user-password" type="password" /></label>
+          <label class="field"><span>Пароль</span>
+            <span class="input-wrap">
+              <input class="input" id="new-user-password" type="password" autocomplete="new-password" />
+              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="new-user-password" aria-label="Показать пароль">${icon('eye')}</button>
+            </span>
+          </label>
           <label class="field"><span>Имя</span><input class="input" id="new-user-display" /></label>
           <label class="checkline"><input type="checkbox" id="new-user-admin" /> Администратор</label>
           <button class="btn tonal" data-settings-action="create-user">Добавить пользователя</button>
@@ -2255,12 +2418,14 @@ async function openSettings() {
           return;
         }
         if (action === 'save-scrobbling') {
+          // Две отдельные кнопки: не затираем Last.fm пустым полем и наоборот.
+          const scope = actionEl.dataset.scope || 'both';
+          const body = {};
+          if (scope !== 'lastfm') body.listenbrainzToken = $('#settings-listenbrainz', modal).value.trim();
+          if (scope !== 'listenbrainz') body.lastfmSessionKey = $('#settings-lastfm-key', modal).value.trim();
           try {
-            await api.saveScrobbling({
-              lastfmSessionKey: $('#settings-lastfm-key', modal).value.trim(),
-              listenbrainzToken: $('#settings-listenbrainz', modal).value.trim(),
-            });
-            toast('Настройки скробблинга сохранены');
+            await api.saveScrobbling(body);
+            toast(scope === 'listenbrainz' ? 'Токен ListenBrainz сохранён' : 'Last.fm сохранён');
             const me = await api.getMe();
             state.meSettings = me.settings;
           } catch (error) {
@@ -2426,6 +2591,8 @@ async function renderLibrary(seq) {
     { href: '#/tracks', icon: 'music', title: 'Треки', sub: `${stats.tracks || 0} в библиотеке` },
     { href: '#/playlists', icon: 'playlist', title: 'Плейлисты', sub: `${playlists.length} ${plural(playlists.length, 'подборка', 'подборки', 'подборок')}` },
     { href: '#/favorites', icon: 'heart', title: 'Избранное', sub: 'Треки, которым вы поставили лайк' },
+    { href: '#/ytm', icon: 'ytm', title: 'YouTube Music', sub: 'Внешний источник: история, лайки, поиск' },
+    { href: '#/live', icon: 'radio', title: 'Live', sub: 'Персональный поток без повторов' },
     { href: '#/stats', icon: 'chart', title: 'Статистика', sub: 'Часы, артисты и история' },
   ];
 
@@ -2810,6 +2977,15 @@ document.addEventListener('click', async (event) => {
     toast(`Режим: ${mode === 'dark' ? 'тёмный' : mode === 'light' ? 'светлый' : 'системный'}`);
     return;
   }
+  if (action === 'toggle-password') {
+    const input = document.getElementById(actionEl.dataset.target);
+    if (!input) return;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    actionEl.innerHTML = icon(show ? 'eyeOff' : 'eye');
+    actionEl.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
+    return;
+  }
   if (action === 'density') {
     const value = actionEl.dataset.value;
     applyDensity(value);
@@ -2838,6 +3014,15 @@ document.addEventListener('click', async (event) => {
   if (action === 'ytm-reconnect') {
     state.ytmStatus = { connected: false, account: null };
     $('#view').innerHTML = '';
+    route();
+    return;
+  }
+  if (action === 'run-search') {
+    runPageSearch(actionEl.dataset.query || '');
+    return;
+  }
+  if (action === 'clear-searches') {
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
     route();
     return;
   }
@@ -3041,19 +3226,6 @@ $('#np').addEventListener('input', (event) => {
     updateVolumeUi();
     return;
   }
-  const slider = event.target.closest('[data-eq-band]');
-  if (slider) {
-    const index = Number(slider.dataset.eqBand);
-    const value = Number(slider.value);
-    const label = $(`#eq-val-${index}`);
-    if (label) label.textContent = `${value > 0 ? '+' : ''}${value}`;
-    player.eqState.gains[index] = value;
-    player.eqState.preset = 'custom';
-    player.setEqGain(index, value);
-    $$('.eq-presets .chip-btn').forEach((button) =>
-      button.classList.toggle('active', button.dataset.eqPreset === 'custom'),
-    );
-  }
 });
 
 $('#np').addEventListener('change', (event) => {
@@ -3207,6 +3379,82 @@ $('#pb-cover').addEventListener('touchend', (e) => {
   }
 });
 
+// --- Эквалайзер: собственный вертикальный слайдер -------------------------
+// Нативный vertical range в Firefox рисуется как попало и не тянется пальцем,
+// поэтому ползунок считаем сами: pointerdown/move по треку → дБ от -12 до +12.
+
+let eqDrag = null;
+
+function eqValueFromPointer(trackEl, clientY) {
+  const rect = trackEl.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
+  return Math.round(12 - ratio * 24);
+}
+
+function paintEqBand(trackEl, value) {
+  const index = Number(trackEl.dataset.eqBand);
+  const pct = ((12 - value) / 24) * 100;
+  const thumb = trackEl.querySelector('.eq-thumb');
+  const fill = trackEl.querySelector('.eq-fill');
+  if (thumb) thumb.style.top = `${pct}%`;
+  if (fill) {
+    fill.style.top = `${Math.min(pct, 50)}%`;
+    fill.style.height = `${Math.abs(50 - pct)}%`;
+  }
+  trackEl.setAttribute('aria-valuenow', String(value));
+  const label = $(`#eq-val-${index}`);
+  if (label) label.textContent = `${value > 0 ? '+' : ''}${value}`;
+}
+
+function applyEqValue(trackEl, value, final) {
+  const index = Number(trackEl.dataset.eqBand);
+  paintEqBand(trackEl, value);
+  player.eqState.gains[index] = value;
+  player.setEqGain(index, value);
+  if (final) {
+    player.eqState.preset = 'custom';
+    $$('.eq-presets .chip-btn').forEach((button) =>
+      button.classList.toggle('active', button.dataset.eqPreset === 'custom'),
+    );
+  }
+}
+
+document.addEventListener('pointerdown', (event) => {
+  const trackEl = event.target.closest('.eq-track');
+  if (!trackEl) return;
+  event.preventDefault();
+  eqDrag = { el: trackEl, value: eqValueFromPointer(trackEl, event.clientY) };
+  trackEl.setPointerCapture?.(event.pointerId);
+  applyEqValue(trackEl, eqDrag.value, false);
+});
+
+document.addEventListener('pointermove', (event) => {
+  if (!eqDrag) return;
+  event.preventDefault();
+  eqDrag.value = eqValueFromPointer(eqDrag.el, event.clientY);
+  applyEqValue(eqDrag.el, eqDrag.value, false);
+});
+
+document.addEventListener('pointerup', () => {
+  if (!eqDrag) return;
+  applyEqValue(eqDrag.el, eqDrag.value, true);
+  eqDrag = null;
+});
+
+document.addEventListener('pointercancel', () => {
+  eqDrag = null;
+});
+
+document.addEventListener('keydown', (event) => {
+  const trackEl = event.target.closest?.('.eq-track');
+  if (!trackEl) return;
+  const step = event.key === 'ArrowUp' ? 1 : event.key === 'ArrowDown' ? -1 : 0;
+  if (!step) return;
+  event.preventDefault();
+  const current = Number(trackEl.getAttribute('aria-valuenow')) || 0;
+  applyEqValue(trackEl, Math.max(-12, Math.min(12, current + step)), true);
+});
+
 // Search
 const searchInput = $('#search-input');
 let searchTimer;
@@ -3224,6 +3472,7 @@ searchInput.addEventListener('keydown', (event) => {
     if (!query) return;
     // Close the on-screen keyboard before the results replace the view.
     searchInput.blur();
+    rememberSearch(query);
     const target = `#/search?q=${encodeURIComponent(query)}`;
     if (location.hash === target) route();
     else location.hash = target;

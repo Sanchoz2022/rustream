@@ -204,6 +204,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_plays_user_started ON plays(user_id, started_at DESC);
         CREATE INDEX IF NOT EXISTS idx_plays_track ON plays(track_id);
         CREATE INDEX IF NOT EXISTS idx_dislikes_user ON dislikes(user_id, item_type);
+
+        CREATE TABLE IF NOT EXISTS player_state (
+            user_id TEXT PRIMARY KEY,
+            payload TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
         "#,
     )
     .execute(pool)

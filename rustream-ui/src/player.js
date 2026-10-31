@@ -499,6 +499,43 @@ export class Player extends EventTarget {
    * Restore the last queue without starting audio (browsers block autoplay).
    * Returns the saved snapshot, or null when there is nothing to restore.
    */
+  /** Снимок состояния для другого устройства. */
+  snapshotState() {
+    return {
+      queue: this.queue,
+      index: this.index,
+      liveMode: this.liveMode,
+      updatedAt: Date.now(),
+    };
+  }
+
+  /** Когда локальный снимок делался в последний раз. */
+  localUpdatedAt() {
+    try {
+      const snapshot = JSON.parse(localStorage.getItem(STORAGE_QUEUE));
+      return Number(snapshot?.updatedAt) || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Применить состояние, пришедшее с сервера (другое устройство). */
+  applyRemote(snapshot) {
+    if (!snapshot?.queue?.length) return null;
+    this.queue = snapshot.queue;
+    this.index = Math.min(Math.max(0, Number(snapshot.index) || 0), this.queue.length - 1);
+    this.liveMode = !!snapshot.liveMode;
+    this.track = this.queue[this.index];
+    if (!this.track) return null;
+
+    this._restoredPause = true;
+    this.audio.src = streamUrl(this.track.id);
+    this._updateMediaSession(this.track);
+    this.dispatchEvent(new CustomEvent('track', { detail: this.track }));
+    this._storeQueue();
+    return { track: this.track, liveMode: this.liveMode };
+  }
+
   restore() {
     let snapshot = null;
     try {

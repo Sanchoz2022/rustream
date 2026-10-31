@@ -71,6 +71,10 @@ pub fn protected_routes() -> Router<Arc<RwLock<AppState>>> {
             get(me::api_get_ratings).put(me::api_set_rating),
         )
         .route("/api/me/history", delete(me::api_clear_history))
+        .route(
+            "/api/me/player",
+            get(me::api_get_player).put(me::api_put_player),
+        )
         .route("/api/me/ytm", get(ytm::api_get_connection))
         .route("/api/me/ytm", put(ytm::api_connect))
         .route("/api/me/ytm", delete(ytm::api_disconnect))

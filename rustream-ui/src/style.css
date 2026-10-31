@@ -964,6 +964,39 @@ textarea.input {
   color: var(--on-surface-faint);
 }
 
+.input-wrap {
+  position: relative;
+  display: block;
+}
+
+.input-wrap .input {
+  padding-right: 44px;
+}
+
+.reveal-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--on-surface-variant);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.reveal-btn:hover {
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+}
+
+.reveal-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
 .checkline {
   display: flex;
   align-items: center;
@@ -2660,8 +2693,8 @@ textarea.input {
   position: relative;
   width: min(1040px, 100%);
   height: min(720px, 100%);
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   border-radius: var(--shape-xl);
   background: var(--surface-container);
   box-shadow: var(--elev-3);
@@ -2722,24 +2755,28 @@ textarea.input {
 }
 
 .np-body {
-  flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
   gap: 28px;
   padding: 24px;
+  overflow: hidden;
 }
 
 .np-side {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .np-cover {
-  width: 100%;
+  width: min(100%, 320px);
   aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
   border-radius: var(--shape-lg);
   overflow: hidden;
   background: var(--surface-container-high);
@@ -2810,7 +2847,9 @@ textarea.input {
 
 .np-panel {
   min-width: 0;
+  max-width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
 }
 
@@ -2859,11 +2898,20 @@ textarea.input {
 
 .np-volume input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -4px;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
   border-radius: 50%;
-  background: var(--on-surface);
+  background: var(--primary);
+  border: 2px solid var(--surface-container);
+}
+
+.np-volume input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--surface-container);
+  border-radius: 50%;
+  background: var(--primary);
 }
 
 .panel-title {
@@ -2973,13 +3021,55 @@ textarea.input {
   min-height: 16px;
 }
 
-.eq-slider {
-  writing-mode: vertical-lr;
-  direction: rtl;
-  width: 8px;
-  height: 168px;
-  accent-color: var(--primary);
-  cursor: pointer;
+/* Ползунок эквалайзера рисуем сами: нативный vertical range ломается
+   в Firefox и не тянется пальцем. */
+.eq-track {
+  position: relative;
+  width: 32px;
+  height: 180px;
+  border-radius: var(--shape-full);
+  background: var(--surface-container-highest);
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.eq-center {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 1px;
+  background: var(--outline);
+  opacity: 0.45;
+}
+
+.eq-fill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  border-radius: 3px;
+  background: var(--primary);
+  pointer-events: none;
+}
+
+.eq-thumb {
+  position: absolute;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--surface-container);
+  box-shadow: var(--elev-1);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: transform 120ms var(--ease);
+}
+
+.eq-track:active .eq-thumb {
+  transform: translate(-50%, -50%) scale(1.12);
 }
 
 .eq-freq {
@@ -3266,6 +3356,13 @@ textarea.input {
   font-size: 16px;
 }
 
+#login-form,
+#register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 #auth-login-view,
 #auth-register-view {
   display: flex;
@@ -3321,6 +3418,26 @@ body.modal-open #view {
 }
 
 /* --- Responsive: tablet -------------------------------------------------- */
+
+@media (max-height: 820px) and (min-width: 1001px) {
+  .np-sheet {
+    height: 100%;
+  }
+  .np-body {
+    padding: 18px 20px;
+    gap: 20px;
+  }
+  .np-cover {
+    width: min(100%, 220px);
+  }
+  .np-controls {
+    margin: 10px 0 2px;
+  }
+  .np-controls .play-btn {
+    width: 48px;
+    height: 48px;
+  }
+}
 
 @media (max-width: 1180px) {
   .playerbar {
@@ -3390,9 +3507,20 @@ body.modal-open #view {
     display: none;
   }
 
-  .searchbox {
-    height: 38px;
-    padding: 0 12px;
+  /* Поиск живёт во вкладке «Поиск» — в шапке он только дублирует поле. */
+  .topbar .searchbox {
+    display: none;
+  }
+
+  .topbar .brand {
+    flex: 1;
+    width: auto;
+    justify-content: flex-start;
+  }
+
+  .brand-name {
+    display: inline;
+    font-size: 15px;
   }
 
   .searchbox kbd {
@@ -3657,10 +3785,13 @@ body.modal-open #view {
   }
 
   .np-body {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr), а не 1fr: иначе широкий эквалайзер растягивает
+       колонку и полосы уезжают за край экрана. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
     padding: 14px 18px 18px;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .np-side {
@@ -3684,6 +3815,44 @@ body.modal-open #view {
 
   .np-transport {
     padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0));
+  }
+
+  .eq {
+    /* Жёстко по ширине экрана: панель внутри листа может оказаться шире
+       из-за min-content полос, и тогда крайние ползунки уезжали за край. */
+    width: calc(100vw - 36px);
+    max-width: calc(100vw - 36px);
+    padding: 14px 8px 10px;
+    min-height: 0;
+    gap: 4px;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+  }
+
+  /* 10 полос должны помещаться в 390px без горизонтального скролла. */
+  .eq-band {
+    flex: 0 0 32px;
+    gap: 6px;
+  }
+
+  .eq-track {
+    height: 140px;
+    width: 20px;
+  }
+
+  .eq-value {
+    font-size: 10px;
+  }
+
+  .eq-freq {
+    font-size: 8px;
+  }
+
+  .eq-thumb {
+    width: 18px;
+    height: 18px;
   }
 
   .toast {

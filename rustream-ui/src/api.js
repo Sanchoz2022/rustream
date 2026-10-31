@@ -352,3 +352,14 @@ export async function ytmHistory(limit = 40) {
   const data = await jsonFetch(`/api/ytm/history?limit=${limit}`);
   return data?.tracks || [];
 }
+
+
+// --- Состояние плеера (между устройствами) ------------------------------------
+
+export function getPlayerState() {
+  return jsonFetch('/api/me/player');
+}
+
+export function savePlayerState(state) {
+  return jsonFetch('/api/me/player', { method: 'PUT', body: JSON.stringify({ state }) });
+}

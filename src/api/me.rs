@@ -249,3 +249,64 @@ pub async fn api_clear_history(
         Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }
 }
+
+
+// --- Состояние плеера (синхронизация между устройствами) ---------------------
+
+#[derive(Deserialize)]
+pub struct PlayerStateRequest {
+    /// Непрозрачный JSON: очередь, текущий трек, позиция, режимы.
+    pub state: Value,
+}
+
+/// `GET /api/me/player` — что этот пользователь слушал в последний раз.
+pub async fn api_get_player(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Extension(user): Extension<AuthUser>,
+) -> Response {
+    let db = super::db(&state).await;
+    let row: Option<(String, i64)> =
+        sqlx::query_as("SELECT payload, updated_at FROM player_state WHERE user_id = ?")
+            .bind(&user.user_id)
+            .fetch_optional(&db)
+            .await
+            .unwrap_or(None);
+
+    match row {
+        Some((payload, updated_at)) => {
+            let parsed: Value = serde_json::from_str(&payload).unwrap_or(Value::Null);
+            Json(json!({ "state": parsed, "updatedAt": updated_at })).into_response()
+        }
+        None => Json(json!({ "state": null, "updatedAt": 0 })).into_response(),
+    }
+}
+
+/// `PUT /api/me/player` — устройство сообщает своё состояние.
+pub async fn api_put_player(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Extension(user): Extension<AuthUser>,
+    Json(body): Json<PlayerStateRequest>,
+) -> Response {
+    // Ограничиваем размер: состояние — это очередь из треков, а не файлы.
+    let payload = body.state.to_string();
+    if payload.len() > 512 * 1024 {
+        return fail(StatusCode::PAYLOAD_TOO_LARGE, "player state is too large");
+    }
+
+    let db = super::db(&state).await;
+    let now = chrono::Utc::now().timestamp();
+    let result = sqlx::query(
+        "INSERT INTO player_state (user_id, payload, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT (user_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+    )
+    .bind(&user.user_id)
+    .bind(&payload)
+    .bind(now)
+    .execute(&db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "status": "ok", "updatedAt": now })).into_response(),
+        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    }
+}
