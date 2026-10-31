@@ -47,11 +47,9 @@ echo "==> 4/8 Резервная копия базы и остановка се�
 # The scripts run inside the container; stdin is the file, so no quoting hell.
 "${SSH[@]}" "pct exec $LXC_ID -- sh -s $RUSTREAM_DIR --keep-stopped" < deploy/backup-db.sh
 
-echo "==> 5/8 Установка бинарника и статики"
+echo "==> 5/8 Установка бинарника (UI встроен, static не нужен)"
 "${SSH[@]}" "pct push $LXC_ID /tmp/rustream-binary $RUSTREAM_DIR/rustream.new"
-"${SSH[@]}" "pct exec $LXC_ID -- sh -c 'mv $RUSTREAM_DIR/rustream.new $RUSTREAM_DIR/rustream && chmod +x $RUSTREAM_DIR/rustream'"
-"${SSH[@]}" "pct push $LXC_ID /tmp/rustream-static.tgz /tmp/rustream-static.tgz"
-"${SSH[@]}" "pct exec $LXC_ID -- sh -c 'rm -rf $RUSTREAM_DIR/static && mkdir -p $RUSTREAM_DIR/static && tar -xzf /tmp/rustream-static.tgz -C $RUSTREAM_DIR/static && rm -f /tmp/rustream-static.tgz'"
+"${SSH[@]}" "pct exec $LXC_ID -- sh -c 'mv $RUSTREAM_DIR/rustream.new $RUSTREAM_DIR/rustream && chmod +x $RUSTREAM_DIR/rustream && rm -rf $RUSTREAM_DIR/static'"
 
 echo "==> 6/8 yt-dlp для YouTube Music"
 "${SSH[@]}" "pct exec $LXC_ID -- sh -s $RUSTREAM_DIR" < deploy/setup-ytdlp.sh

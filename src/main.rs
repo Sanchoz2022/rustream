@@ -15,7 +15,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
@@ -30,6 +29,7 @@ mod scanner;
 mod scrobble;
 mod streaming;
 mod subsonic;
+mod web;
 mod ytm;
 
 use config::Config;
@@ -53,6 +53,13 @@ async fn main() -> Result<()> {
 
     let config = config::load()?;
     info!("Loaded config: {config:?}");
+
+    // UI встроен в бинарник. Если рядом лежит реальная папка `static`
+    // (dev-режим, `npm run build` + `cargo run`), отдаём файлы с диска,
+    // чтобы правки CSS/JS не требовали перекомпиляции.
+    if std::path::Path::new(&config.static_dir).is_dir() {
+        std::env::set_var("RUSTREAM_STATIC_DIR", &config.static_dir);
+    }
 
     let db = db::init(&config.db_path).await?;
     db::run_migrations(&db).await?;
@@ -99,12 +106,14 @@ async fn main() -> Result<()> {
         .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     let app = Router::new()
-        .route("/", get(root_handler))
+        .route("/", get(web::serve_index))
+        .route("/favicon.ico", get(web::serve_favicon))
+        .route("/static", get(web::serve_static))
+        .route("/static/*path", get(web::serve_static))
         .route("/stream/:track_id", get(api::playback::stream_route))
         .nest("/rest", subsonic::routes(state.clone()))
         .merge(api::public_routes())
         .merge(protected)
-        .nest_service("/static", ServeDir::new(&config.static_dir))
         .layer(CorsLayer::permissive())
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -114,10 +123,6 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
-}
-
-async fn root_handler() -> axum::response::Redirect {
-    axum::response::Redirect::temporary("/static/index.html")
 }
 
 async fn require_auth(

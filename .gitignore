@@ -13,3 +13,6 @@ deploy/.env
 rustream-ui/node_modules/
 rustream-ui/dist/
 .serena/
+rustream
+rustream-musl
+static.tar.gz

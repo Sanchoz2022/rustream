@@ -1,7 +1,6 @@
 target/
 .git/
 .serena/
-static/
 rustream-ui/node_modules/
 rustream-ui/dist/
 deploy/.env
