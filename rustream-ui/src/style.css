@@ -2695,7 +2695,10 @@ textarea.input {
   height: min(720px, 100%);
   display: grid;
   /* Дети листа: ручка, шапка, тело, транспорт — четыре строки, иначе шапка
-     попадает в растянутую 1fr и висит посреди пустоты. */
+     попадает в растянутую 1fr и висит посреди пустоты. Колонку фиксируем
+     minmax(0,1fr): иначе вкладки своим min-content растягивают лист шире
+     экрана (на 320px он становился 419px и громкость уезжала за край). */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   border-radius: var(--shape-xl);
   background: var(--surface-container);
@@ -3760,11 +3763,13 @@ body.modal-open #view {
   /* Now playing: полноэкранный лист. */
   .np {
     padding: 0;
+    height: 100dvh;
   }
 
   .np-sheet {
     width: 100%;
-    height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0;
   }
 
@@ -3773,7 +3778,23 @@ body.modal-open #view {
   }
 
   .np-head {
-    padding: 6px 10px 10px;
+    padding: 6px 8px 10px;
+    gap: 6px;
+  }
+
+  .np-tabs {
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .np-tab {
+    min-width: 0;
+    padding: 0 10px;
+  }
+
+  .np-tab span {
+    white-space: nowrap;
   }
 
   .np-tab {
@@ -3810,7 +3831,8 @@ body.modal-open #view {
   /* Обложка масштабируется и от ширины, и от высоты: на 20:9 экран высокий,
      фиксированные 300px оставляли провал между обложкой и транспортом. */
   .np-cover {
-    width: min(84vw, 38vh, 380px);
+    width: min(84vw, 34vh, 360px);
+    max-width: 100%;
     aspect-ratio: 1 / 1;
   }
 
@@ -3839,10 +3861,13 @@ body.modal-open #view {
     margin-top: 0;
     justify-content: flex-end;
     gap: 8px;
+    min-width: 0;
   }
 
   .np-volume input[type='range'] {
-    width: 130px;
+    width: 110px;
+    min-width: 0;
+    flex: 0 1 110px;
   }
 
   .np-controls {
@@ -3979,6 +4004,53 @@ body.modal-open #view {
 
   .auth-card {
     padding: 22px;
+  }
+}
+
+/* Короткие экраны (телефон в браузере с панелью): обложка и второстепенные
+   чипы съедают всю высоту, и панели текста/очереди не остаётся места. */
+@media (max-height: 720px) and (max-width: 700px) {
+  .np-cover {
+    width: min(58vw, 25vh, 300px);
+  }
+
+  .np-side {
+    gap: 5px;
+  }
+
+  .np-chips {
+    display: none;
+  }
+
+  .np-controls {
+    margin: 4px 0 0;
+    gap: 10px;
+  }
+
+  .np-controls .play-btn {
+    width: 56px;
+    height: 56px;
+  }
+
+  .np-actions {
+    margin-top: 0;
+  }
+
+  .np-actions .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 400px) {
+  .np-tab span {
+    display: none;
+  }
+  .np-tab {
+    padding: 0 12px;
+  }
+  .np-head-spacer {
+    width: 0;
   }
 }
 
