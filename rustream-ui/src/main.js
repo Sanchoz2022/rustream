@@ -1914,17 +1914,35 @@ function setLiveMode(value) {
 // Раньше очередь жила только в localStorage: на телефоне и ноутбуке были
 // разные треки. Теперь снимок состояния лежит на сервере у профиля.
 
+const PLAYER_SYNC_KEY = 'rustream.playerSyncedAt';
 let playerPushTimer = null;
+
+/** Серверный updatedAt, который это устройство уже видело/записало.
+ *  Сравниваем только серверные метки — часы телефона и сервера расходятся,
+ *  из-за чего состояние раньше могло не применяться вообще. */
+function playerSyncedAt() {
+  return Number(localStorage.getItem(PLAYER_SYNC_KEY)) || 0;
+}
+
+function setPlayerSyncedAt(at) {
+  if (Number(at) > 0) localStorage.setItem(PLAYER_SYNC_KEY, String(at));
+}
 
 function pushPlayerState() {
   if (!state.me || !player.queue.length) return;
+  if (state.skipPushUntil && Date.now() < state.skipPushUntil) return;
   clearTimeout(playerPushTimer);
-  playerPushTimer = setTimeout(() => {
-    api.savePlayerState(player.snapshotState()).catch(() => {});
+  playerPushTimer = setTimeout(async () => {
+    try {
+      const saved = await api.savePlayerState(player.snapshotState());
+      setPlayerSyncedAt(saved?.updatedAt);
+    } catch {
+      /* сеть пропала — попробуем на следующем событии */
+    }
   }, 3000);
 }
 
-async function syncPlayerFromServer() {
+async function syncPlayerFromServer({ force = false } = {}) {
   let remote;
   try {
     remote = await api.getPlayerState();
@@ -1932,13 +1950,25 @@ async function syncPlayerFromServer() {
     return;
   }
   const remoteAt = Number(remote?.updatedAt) || 0;
-  if (!remote?.state?.queue?.length) return;
-  // Локальное состояние свежее — не затираем то, что человек слушает сейчас.
-  if (remoteAt <= player.localUpdatedAt()) return;
-  if (remote.state.updatedAt && remote.state.updatedAt > remoteAt) return;
+  const snapshot = remote?.state;
+  if (!snapshot?.queue?.length) return;
 
-  const applied = player.applyRemote(remote.state);
+  // Уже видели эту версию — не дёргаем плеер зря.
+  if (!force && remoteAt <= playerSyncedAt()) return;
+
+  // Не перебиваем то, что человек слушает прямо сейчас на этом устройстве,
+  // если только это не тот же трек (тогда просто обновляем очередь).
+  const remoteTrack = snapshot.queue[Math.min(Number(snapshot.index) || 0, snapshot.queue.length - 1)];
+  const sameTrack = remoteTrack?.id && remoteTrack.id === player.track?.id;
+  if (!force && !player.paused && !sameTrack) return;
+
+  const applied = player.applyRemote(snapshot);
   if (!applied) return;
+
+  setPlayerSyncedAt(remoteAt);
+  // Не отправляем только что полученное состояние обратно — иначе два
+  // открытых устройства будут гонять его по кругу.
+  state.skipPushUntil = Date.now() + 5000;
   state.liveMode = !!applied.liveMode;
   updateTrackUi();
   updatePlayState();
@@ -1946,9 +1976,19 @@ async function syncPlayerFromServer() {
   if (location.hash.startsWith('#/live')) route();
 }
 
+// Подхватываем изменения, даже если вкладка уже открыта.
+setInterval(() => {
+  if (!document.hidden) syncPlayerFromServer();
+}, 30000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) syncPlayerFromServer();
+});
+
 // Отправляем состояние, когда трек/очередь реально меняются, и при уходе.
 player.addEventListener('track', pushPlayerState);
 player.addEventListener('queue', pushPlayerState);
+player.addEventListener('state', pushPlayerState);
 window.addEventListener('pagehide', () => {
   if (!state.me || !player.queue.length) return;
   try {

@@ -505,6 +505,9 @@ export class Player extends EventTarget {
       queue: this.queue,
       index: this.index,
       liveMode: this.liveMode,
+      // Позиция нужна, чтобы на другом устройстве можно было продолжить
+      // с того же места, а не с начала трека.
+      position: Math.max(0, Math.floor(Number(this.audio.currentTime) || 0)),
       updatedAt: Date.now(),
     };
   }
@@ -532,6 +535,20 @@ export class Player extends EventTarget {
     this.audio.src = streamUrl(this.track.id);
     this._updateMediaSession(this.track);
     this.dispatchEvent(new CustomEvent('track', { detail: this.track }));
+
+    const position = Number(snapshot.position) || 0;
+    if (position > 1) {
+      const applyPosition = () => {
+        const duration = this.audio.duration;
+        if (!Number.isFinite(duration) || position < duration - 3) {
+          this.audio.currentTime = position;
+          this._emit('time');
+        }
+      };
+      if (this.audio.readyState >= 1) applyPosition();
+      else this.audio.addEventListener('loadedmetadata', applyPosition, { once: true });
+    }
+
     this._storeQueue();
     return { track: this.track, liveMode: this.liveMode };
   }
