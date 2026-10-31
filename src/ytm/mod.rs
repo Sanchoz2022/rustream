@@ -466,30 +466,46 @@ async fn resolve(
     }
 
     let cookie_file = write_cookie_file(cookies).await?;
-    let attempt = run_ytdlp(config, video_id, Some(&cookie_file)).await;
+    let first = run_ytdlp(config, video_id, Some(&cookie_file)).await;
     tokio::fs::remove_file(&cookie_file).await.ok();
 
-    // Cookies из профиля могут протухнуть (SAPISID живёт месяцами, но легко
-    // инвалидируется сменой пароля/выходом из аккаунта). Тогда yt-dlp падает
-    // на авторизации, хотя публичный трек прекрасно резолвится анонимно.
-    // Поэтому вторая попытка — без cookies: пользователь получает звук, а не 502.
-    let output = match attempt {
-        Ok(output) => output,
-        Err(first) => {
+    // Cookies из профиля могут протухнуть (SAPISID легко инвалидируется
+    // сменой пароля или выходом из аккаунта). Тогда yt-dlp завершается с
+    // ошибкой, хотя публичный трек прекрасно резолвится анонимно. Поэтому
+    // вторая попытка — без cookies: пользователь получает звук, а не 502.
+    let output = match first {
+        Ok(output) if output.status.success() => output,
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let reason = stderr.trim().lines().next().unwrap_or("exit != 0").to_string();
             if cookies.is_empty() {
-                return Err(first);
+                return Err(anyhow!("yt-dlp failed: {}", stderr.trim()));
             }
             tracing::warn!(
-                "YouTube Music: cookies профиля не сработали ({first}); повторяю без cookies"
+                "YouTube Music: cookies профиля не сработали ({reason}); повторяю без cookies"
             );
-            run_ytdlp(config, video_id, None).await?
+            let retry = run_ytdlp(config, video_id, None).await?;
+            if !retry.status.success() {
+                let stderr = String::from_utf8_lossy(&retry.stderr);
+                return Err(anyhow!("yt-dlp failed без cookies: {}", stderr.trim()));
+            }
+            retry
+        }
+        Err(error) => {
+            if cookies.is_empty() {
+                return Err(error);
+            }
+            tracing::warn!(
+                "YouTube Music: cookies профиля не сработали ({error}); повторяю без cookies"
+            );
+            let retry = run_ytdlp(config, video_id, None).await?;
+            if !retry.status.success() {
+                let stderr = String::from_utf8_lossy(&retry.stderr);
+                return Err(anyhow!("yt-dlp failed без cookies: {}", stderr.trim()));
+            }
+            retry
         }
     };
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("yt-dlp failed: {}", stderr.trim()));
-    }
 
     #[derive(serde::Deserialize)]
     struct Info {

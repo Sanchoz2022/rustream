@@ -592,7 +592,6 @@ async function renderHome(seq) {
   if (seq !== state.renderSeq) return;
   cache.recent = recent;
 
-  // YouTube подмешивается в главную: сервер и внешний источник в одной ленте.
   const ytmStatus = state.ytmStatus || (await api.getYtmStatus().catch(() => null));
   state.ytmStatus = ytmStatus;
   let ytmRecent = [];
@@ -600,9 +599,15 @@ async function renderHome(seq) {
     ytmRecent = await api.ytmHistory(10).catch(() => []);
   }
   if (seq !== state.renderSeq) return;
-  state.ytmLists = { ...(state.ytmLists || {}), history: ytmRecent };
 
+  // «Быстрый выбор»: несколько треков из библиотеки, как Quick picks в SimpMusic.
+  const quick = [...tracks].sort(() => Math.random() - 0.5).slice(0, 6);
+  const recentlyPlayed = (meStats.recent || []).slice(0, 6);
+
+  state.lists = { ...(state.lists || {}), quick, recent: recentlyPlayed };
+  state.ytmLists = { ...(state.ytmLists || {}), history: ytmRecent };
   state.currentTracks = tracks;
+
   const current = player.track;
   const continueQueue = player.queue.length ? player.queue : null;
 
@@ -616,21 +621,50 @@ async function renderHome(seq) {
         <div class="head-actions">
           <button class="btn primary" data-action="play-all">${icon('play')} Слушать всё</button>
           <button class="btn glass" data-action="shuffle-all">${icon('shuffle')} Перемешать</button>
-          <button class="btn ghost" data-action="start-live">${icon('radio')} Live</button>
         </div>
       </header>
 
       ${
-        current && continueQueue
+        current
           ? `<section class="continue-card">
               <span class="continue-cover">${coverHtml(current.coverArt || current.albumId, { size: 120, alt: current.title })}</span>
               <span class="continue-main">
                 <span class="eyebrow">Продолжить слушать</span>
                 <strong>${esc(current.title)}</strong>
-                <small>${esc(current.artist || '')}${player.paused ? ' · на паузе' : ' · играет'}</small>
+                <small>${esc(current.artist || '')}${continueQueue ? ` · ${player.index + 1} из ${player.queue.length}` : ''}</small>
               </span>
-              <button class="btn primary" data-action="resume">${icon(player.paused ? 'play' : 'pause')} ${player.paused ? 'Продолжить' : 'Пауза'}</button>
+              <button class="btn primary" data-action="toggle">${icon(player.paused ? 'play' : 'pause')} ${player.paused ? 'Продолжить' : 'Пауза'}</button>
               <a class="btn ghost" href="#/live">${icon('queue')} Очередь</a>
+            </section>`
+          : ''
+      }
+
+      ${
+        quick.length
+          ? `<section class="section">
+              <div class="section-head">
+                <div>
+                  <h2>Быстрый выбор</h2>
+                  <p class="muted">Случайные треки из вашей библиотеки</p>
+                </div>
+                <button class="text-link" data-action="shuffle-library">Перемешать всё ${icon('next')}</button>
+              </div>
+              ${trackList(quick, { showCover: true, rowAction: 'play-list-row', rowList: 'quick' })}
+            </section>`
+          : ''
+      }
+
+      ${
+        recentlyPlayed.length
+          ? `<section class="section">
+              <div class="section-head">
+                <div>
+                  <h2>Недавно слушали</h2>
+                  <p class="muted">Продолжите с любого места</p>
+                </div>
+                <a class="text-link" href="#/stats">История ${icon('next')}</a>
+              </div>
+              ${trackList(recentlyPlayed, { showCover: true, rowAction: 'play-list-row', rowList: 'recent' })}
             </section>`
           : ''
       }
@@ -2919,6 +2953,15 @@ document.addEventListener('click', async (event) => {
     if (event.target.closest('[data-action="like"], [data-action="dislike"], [data-action="add-to-playlist"]')) return;
     setLiveMode(false);
     await player.playTracks(state.currentTracks, index);
+    return;
+  }
+  if (action === 'play-list-row') {
+    const index = Number(actionEl.dataset.index);
+    if (event.target.closest('[data-action="like"], [data-action="dislike"], [data-action="add-to-playlist"]')) return;
+    const list = state.lists?.[actionEl.dataset.list];
+    if (!list?.length) return;
+    setLiveMode(false);
+    await player.playTracks(list, index);
     return;
   }
   if (action === 'play-ytm-row') {
