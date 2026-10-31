@@ -1469,6 +1469,7 @@ function updateTrackUi() {
     $('.pb-cover').classList.remove('loaded');
     qualityFormat.textContent = '—';
     qualityDetail.textContent = '';
+    updateMediaSession(null);
     return;
   }
 
@@ -1489,6 +1490,47 @@ function updateTrackUi() {
     .filter(Boolean)
     .join(' · ');
   updatePlayerRating();
+  updateMediaSession(track);
+}
+
+function updateMediaSession(track) {
+  if (!('mediaSession' in navigator)) return;
+  
+  if (!track) {
+    navigator.mediaSession.metadata = null;
+    return;
+  }
+  
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: track.title || 'Без названия',
+    artist: track.artist || 'Неизвестный артист',
+    album: track.album || '',
+    artwork: [
+      { src: api.coverUrl(track.coverArt || track.albumId, 96), sizes: '96x96', type: 'image/jpeg' },
+      { src: api.coverUrl(track.coverArt || track.albumId, 128), sizes: '128x128', type: 'image/jpeg' },
+      { src: api.coverUrl(track.coverArt || track.albumId, 256), sizes: '256x256', type: 'image/jpeg' },
+      { src: api.coverUrl(track.coverArt || track.albumId, 512), sizes: '512x512', type: 'image/jpeg' },
+    ],
+  });
+}
+
+// MediaSession handlers (один раз при загрузке)
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => player.play());
+  navigator.mediaSession.setActionHandler('pause', () => player.pause());
+  navigator.mediaSession.setActionHandler('previoustrack', () => player.prev());
+  navigator.mediaSession.setActionHandler('nexttrack', () => player.next());
+  navigator.mediaSession.setActionHandler('seekto', (details) => {
+    if (details.seekTime !== undefined) {
+      player.seekTo(details.seekTime);
+    }
+  });
+  navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+    player.seekBy(-(details.seekOffset || 10));
+  });
+  navigator.mediaSession.setActionHandler('seekforward', (details) => {
+    player.seekBy(details.seekOffset || 10);
+  });
 }
 
 function updateTimeUi() {
@@ -2646,6 +2688,41 @@ document.addEventListener('keydown', (event) => {
   }
   if (event.key === 'ArrowRight' && !typing && event.shiftKey) player.seekBy(5);
   if (event.key === 'ArrowLeft' && !typing && event.shiftKey) player.seekBy(-5);
+  
+  // Новые хоткеи
+  if (!typing) {
+    // L → лайк текущего трека
+    if (event.key.toLowerCase() === 'l' && player.track) {
+      event.preventDefault();
+      toggleLike(player.track.id);
+    }
+    // N → следующий трек
+    if (event.key.toLowerCase() === 'n') {
+      event.preventDefault();
+      player.next();
+    }
+    // P → предыдущий трек (только если не Ctrl+P для печати)
+    if (event.key.toLowerCase() === 'p' && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      player.prev();
+    }
+    // M → mute/unmute
+    if (event.key.toLowerCase() === 'm') {
+      event.preventDefault();
+      player.toggleMute();
+    }
+    // S → shuffle
+    if (event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      player.toggleShuffle();
+    }
+    // R → repeat
+    if (event.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      player.toggleRepeat();
+    }
+  }
+  
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
     $('#search-input').focus();
@@ -2653,6 +2730,85 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if ($('#modal-root').innerHTML) closeModal();
     else closeNowPlaying();
+  }
+});
+
+// Touch gestures (mobile)
+let touchStartY = 0;
+let touchStartX = 0;
+let touchStartTime = 0;
+
+// Swipe up on playerbar → open Now Playing
+$('#playerbar').addEventListener('touchstart', (e) => {
+  touchStartY = e.touches[0].clientY;
+  touchStartX = e.touches[0].clientX;
+  touchStartTime = Date.now();
+});
+
+$('#playerbar').addEventListener('touchend', (e) => {
+  const touchEndY = e.changedTouches[0].clientY;
+  const touchEndX = e.changedTouches[0].clientX;
+  const deltaY = touchStartY - touchEndY;
+  const deltaX = Math.abs(touchEndX - touchStartX);
+  const deltaTime = Date.now() - touchStartTime;
+  
+  // Вертикальный свайп вверх (минимум 80px, не более 300ms, горизонтальное смещение < 50px)
+  if (deltaY > 80 && deltaTime < 300 && deltaX < 50) {
+    e.preventDefault();
+    openNowPlaying(state.npTab || 'lyrics');
+  }
+});
+
+// Swipe down on Now Playing sheet → close
+const npSheet = $('.np-sheet');
+if (npSheet) {
+  npSheet.addEventListener('touchstart', (e) => {
+    // Только если свайп начинается с верхней части (не на контроле seek/eq)
+    if (e.target.closest('.np-seek-bar, .eq-band, input[type="range"]')) return;
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+    touchStartTime = Date.now();
+  });
+
+  npSheet.addEventListener('touchend', (e) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndX = e.changedTouches[0].clientX;
+    const deltaY = touchEndY - touchStartY;
+    const deltaX = Math.abs(touchEndX - touchStartX);
+    const deltaTime = Date.now() - touchStartTime;
+    
+    // Вертикальный свайп вниз (минимум 100px, не более 300ms)
+    if (deltaY > 100 && deltaTime < 300 && deltaX < 50) {
+      e.preventDefault();
+      closeNowPlaying();
+    }
+  });
+}
+
+// Double-tap on cover → like
+let lastTapTime = 0;
+let lastTapTarget = null;
+
+$('#pb-cover').addEventListener('touchend', (e) => {
+  const now = Date.now();
+  const target = e.target;
+  
+  if (now - lastTapTime < 300 && target === lastTapTarget) {
+    e.preventDefault();
+    if (player.track) {
+      toggleLike(player.track.id);
+      // Визуальная обратная связь
+      const cover = $('#pb-cover');
+      cover.style.transform = 'scale(0.92)';
+      setTimeout(() => {
+        cover.style.transform = '';
+      }, 150);
+    }
+    lastTapTime = 0;
+    lastTapTarget = null;
+  } else {
+    lastTapTime = now;
+    lastTapTarget = target;
   }
 });
 
