@@ -246,10 +246,18 @@ canvas {
   max-width: 100%;
 }
 
-/* Длинные слова и ссылки не выпихивают контент за экран. */
+/* Длинные слова не выпихивают контент за экран, но и не дают колонке
+   сжаться до одной буквы: break-word переносит только то, что не влезает. */
 .page,
 .np-panel,
 .modal-body {
+  overflow-wrap: break-word;
+}
+
+/* Точечно — только для действительно длинных технических строк. */
+.break-anywhere,
+.settings-meta code,
+.session-key {
   overflow-wrap: anywhere;
 }
 
@@ -873,6 +881,7 @@ h3 {
 }
 
 .status-chip {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1124,9 +1133,10 @@ textarea.input {
 
 .section-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 8px 16px;
   margin-bottom: 16px;
 }
 
@@ -1481,8 +1491,9 @@ textarea.input {
 
 .continue-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 12px 16px;
   padding: 12px 16px 12px 12px;
   margin-bottom: 36px;
   border-radius: var(--shape-lg);
@@ -1505,11 +1516,13 @@ textarea.input {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  flex: 1;
+  /* Основа 180px не даёт блоку схлопнуться, пока кнопки ещё помещаются. */
+  flex: 1 1 180px;
 }
 
 .continue-main strong {
   font-size: 15px;
+  overflow-wrap: normal;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1628,7 +1641,7 @@ textarea.input {
 
 .mix-body {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 150px;
 }
 
 .mix-body h3 {
@@ -1857,7 +1870,7 @@ textarea.input {
 }
 
 .tile-main {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1968,15 +1981,16 @@ textarea.input {
 .user-row,
 .user-create {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 10px 12px;
   border-radius: var(--shape-sm);
   background: var(--surface-container-high);
 }
 
 .user-row-main {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2102,8 +2116,9 @@ textarea.input {
 
 .ytm-account {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   padding: 12px;
   border-radius: var(--shape-md);
   background: var(--surface-container-high);
@@ -2125,15 +2140,21 @@ textarea.input {
 }
 
 .ytm-account-main {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
+
+.ytm-account .head-actions {
+  flex: 1 1 100%;
+}
+
 .ytm-account-main small {
   font-size: 12px;
   color: var(--on-surface-variant);
+  overflow-wrap: normal;
 }
 
 .ytm-connect {
@@ -2165,8 +2186,9 @@ textarea.input {
 
 .invite-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 8px 12px;
   border-radius: var(--shape-sm);
   background: var(--surface-container-high);
@@ -2183,7 +2205,7 @@ textarea.input {
 }
 
 .invite-meta {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -2713,7 +2735,7 @@ textarea.input {
 .np {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 190;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -3197,7 +3219,7 @@ textarea.input {
 }
 
 .queue-main {
-  flex: 1;
+  flex: 1 1 120px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -3239,7 +3261,8 @@ textarea.input {
 .modal {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  /* Выше плеера и таббара: иначе настройки рисуются под ними. */
+  z-index: 200;
   display: grid;
   place-items: center;
   padding: 20px;
@@ -3306,7 +3329,7 @@ textarea.input {
 }
 
 .modal-row > span:nth-child(2) {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -3336,6 +3359,7 @@ textarea.input {
 
 .toast {
   position: fixed;
+  z-index: 300;
   left: 50%;
   bottom: calc(var(--player-h) + 16px);
   transform: translate(-50%, 12px);
@@ -3461,6 +3485,14 @@ body.auth-locked .tabbar {
 
 body.modal-open #view {
   overflow: hidden;
+}
+
+/* Модалка — полноэкранный слой: шапку, плеер и таббар под ней не показываем,
+   иначе они просвечивают сквозь верхний край листа. */
+body.modal-open .topbar,
+body.modal-open .playerbar,
+body.modal-open .tabbar {
+  visibility: hidden;
 }
 
 /* --- Responsive: tablet -------------------------------------------------- */
@@ -4037,6 +4069,20 @@ body.modal-open #view {
 
   .auth-card {
     padding: 22px;
+  }
+
+  /* Настройки на телефоне — нижний лист: не висит по центру и не режется
+     плеером, скролл внутри. */
+  .modal {
+    align-items: end;
+    padding: 0;
+  }
+
+  .modal-body {
+    width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--shape-xl) var(--shape-xl) 0 0;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0));
   }
 }
 
