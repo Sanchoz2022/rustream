@@ -81,6 +81,7 @@ pub fn protected_routes() -> Router<Arc<RwLock<AppState>>> {
         .route("/api/ytm/search", get(ytm::api_search))
         .route("/api/ytm/liked", get(ytm::api_liked))
         .route("/api/ytm/history", get(ytm::api_history))
+        .route("/api/ytm/prefetch", post(ytm::api_prefetch))
         .route(
             "/api/admin/lastfm",
             get(admin::api_get_lastfm_config).put(admin::api_set_lastfm_config),

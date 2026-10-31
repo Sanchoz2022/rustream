@@ -148,6 +148,40 @@ pub async fn api_liked(
     listing(state, user.user_id, Listing::Liked, limit).await
 }
 
+#[derive(Deserialize)]
+pub struct PrefetchRequest {
+    #[serde(default)]
+    ids: Vec<String>,
+}
+
+/// `POST /api/ytm/prefetch` — the UI sends the next tracks of the queue so
+/// their audio URLs are ready before the user presses play.
+pub async fn api_prefetch(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Extension(user): Extension<AuthUser>,
+    Json(request): Json<PrefetchRequest>,
+) -> Response {
+    let (db, config, ytm_state) = {
+        let state = state.read().await;
+        (state.db.clone(), state.config.clone(), state.ytm.clone())
+    };
+    if !config.ytm_enabled {
+        return fail_code(
+            StatusCode::NOT_FOUND,
+            "ytm_disabled",
+            "YouTube Music отключён на этом сервере",
+        );
+    }
+    let ids: Vec<String> = request
+        .ids
+        .into_iter()
+        .filter(|id| id.starts_with(ytm::ID_PREFIX))
+        .take(8)
+        .collect();
+    ytm::spawn_prefetch(ytm_state, db, config, user.user_id, ids);
+    Json(json!({ "queued": true })).into_response()
+}
+
 /// Уже известные этому профилю треки YouTube (локальная БД, без сети).
 pub async fn api_history(
     State(state): State<Arc<RwLock<AppState>>>,

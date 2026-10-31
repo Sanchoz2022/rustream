@@ -32,6 +32,9 @@ const CHUNK: u64 = 1024 * 1024;
 const RESOLVE_TTL: Duration = Duration::from_secs(4 * 3600);
 const YTDLP_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// (user id, video id)
+type TrackKey = (String, String);
+
 #[derive(Clone)]
 struct Resolved {
     url: String,
@@ -42,7 +45,10 @@ struct Resolved {
 
 pub struct YtmState {
     client: reqwest::Client,
-    resolved: Mutex<HashMap<(String, String), Resolved>>,
+    resolved: Mutex<HashMap<TrackKey, Resolved>>,
+    /// One resolve per (user, video) at a time: a prefetch and a play request
+    /// for the same track must not spawn two yt-dlp processes.
+    inflight: Mutex<HashMap<TrackKey, Arc<Mutex<()>>>>,
     downloading: Arc<Mutex<HashSet<(String, String)>>>,
 }
 
@@ -60,6 +66,7 @@ impl YtmState {
         Ok(Self {
             client: builder.build()?,
             resolved: Mutex::new(HashMap::new()),
+            inflight: Mutex::new(HashMap::new()),
             downloading: Arc::new(Mutex::new(HashSet::new())),
         })
     }
@@ -224,6 +231,38 @@ pub async fn list(
     Ok(Some(songs.iter().map(song_json).collect()))
 }
 
+/// How many upcoming tracks are resolved in the background. Each one costs a
+/// yt-dlp run, so the list stays short.
+const PREFETCH_LIMIT: usize = 3;
+
+/// Warm the resolved URL cache so the first play does not wait for yt-dlp
+/// (~3 s per track). Sequential on purpose: prefetch must never slow down the
+/// request that triggered it, and yt-dlp is CPU-hungry.
+pub fn spawn_prefetch(
+    state: Arc<YtmState>,
+    db: SqlitePool,
+    config: Config,
+    user_id: String,
+    ids: Vec<String>,
+) {
+    if ids.is_empty() || !config.ytm_enabled {
+        return;
+    }
+    tokio::spawn(async move {
+        let Ok(Some(cookies)) = load_cookies(&db, &user_id).await else {
+            return;
+        };
+        for id in ids.into_iter().take(PREFETCH_LIMIT) {
+            let Some(video_id) = video_id(&id) else {
+                continue;
+            };
+            if let Err(error) = resolve(&state, &db, &config, &user_id, video_id, &cookies).await {
+                tracing::debug!("YouTube Music prefetch failed for {video_id}: {error}");
+            }
+        }
+    });
+}
+
 /// Store metadata so stream, cover and scrobble requests can find the song
 /// later without asking YouTube again.
 async fn remember(db: &SqlitePool, user_id: &str, songs: &[Song]) -> Result<()> {
@@ -292,7 +331,8 @@ pub async fn history(db: &SqlitePool, user_id: &str, limit: usize) -> Result<Vec
         .collect())
 }
 
-fn song_json(song: &Song) -> Value {    let id = format!("{ID_PREFIX}{}", song.video_id);
+fn song_json(song: &Song) -> Value {
+    let id = format!("{ID_PREFIX}{}", song.video_id);
     json!({
         "id": id,
         "parent": "",
@@ -438,7 +478,7 @@ pub async fn serve_stream(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::FORBIDDEN)?;
-    let resolved = resolve(state, config, user_id, video_id, &cookies)
+    let resolved = resolve(state, db, config, user_id, video_id, &cookies)
         .await
         .map_err(|error| {
             tracing::warn!("YouTube Music resolve failed for {video_id}: {error}");
@@ -453,18 +493,105 @@ pub async fn serve_stream(
 
 async fn resolve(
     state: &YtmState,
+    db: &SqlitePool,
     config: &Config,
     user_id: &str,
     video_id: &str,
     cookies: &[Cookie],
 ) -> Result<Resolved> {
     let key = (user_id.to_string(), video_id.to_string());
-    if let Some(found) = state.resolved.lock().await.get(&key) {
-        if found.at.elapsed() < RESOLVE_TTL {
-            return Ok(found.clone());
-        }
+    if let Some(found) = memory_cached(state, &key).await {
+        return Ok(found);
     }
 
+    let gate = {
+        let mut inflight = state.inflight.lock().await;
+        inflight
+            .entry(key.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    };
+    let _guard = gate.lock().await;
+
+    // The winner of the race may have filled the cache while we waited.
+    if let Some(found) = memory_cached(state, &key).await {
+        return Ok(found);
+    }
+    if let Some(found) = db_cached(db, &key).await {
+        state
+            .resolved
+            .lock()
+            .await
+            .insert(key.clone(), found.clone());
+        return Ok(found);
+    }
+
+    let result = ytdlp_resolve(state, config, video_id, cookies).await;
+    state.inflight.lock().await.remove(&key);
+    let resolved = result?;
+    state
+        .resolved
+        .lock()
+        .await
+        .insert(key.clone(), resolved.clone());
+    store_resolved(db, &key, &resolved).await;
+    Ok(resolved)
+}
+
+async fn memory_cached(state: &YtmState, key: &TrackKey) -> Option<Resolved> {
+    let found = state.resolved.lock().await.get(key).cloned()?;
+    (found.at.elapsed() < RESOLVE_TTL).then_some(found)
+}
+
+/// A resolved URL survives a restart, so the first play after an upgrade (or
+/// from another device) is as fast as a cached one.
+async fn db_cached(db: &SqlitePool, key: &TrackKey) -> Option<Resolved> {
+    let row: Option<(String, String, i64, i64)> = sqlx::query_as(
+        "SELECT resolved_url, resolved_ext, resolved_size, resolved_at
+         FROM ytm_tracks WHERE user_id = ? AND video_id = ?",
+    )
+    .bind(&key.0)
+    .bind(&key.1)
+    .fetch_optional(db)
+    .await
+    .ok()?;
+    let (url, ext, size, at) = row?;
+    let age = chrono::Utc::now().timestamp() - at;
+    if url.is_empty() || size <= 0 || !(0..RESOLVE_TTL.as_secs() as i64).contains(&age) {
+        return None;
+    }
+    Some(Resolved {
+        url,
+        ext,
+        size: size as u64,
+        at: Instant::now(),
+    })
+}
+
+async fn store_resolved(db: &SqlitePool, key: &TrackKey, resolved: &Resolved) {
+    sqlx::query(
+        "UPDATE ytm_tracks SET resolved_url = ?, resolved_ext = ?, resolved_size = ?, resolved_at = ?
+         WHERE user_id = ? AND video_id = ?",
+    )
+    .bind(&resolved.url)
+    .bind(&resolved.ext)
+    .bind(resolved.size as i64)
+    .bind(chrono::Utc::now().timestamp())
+    .bind(&key.0)
+    .bind(&key.1)
+    .execute(db)
+    .await
+    .ok();
+}
+
+/// Everything below `resolve` used to be its body; kept separate so the
+/// cache bookkeeping above stays readable.
+async fn ytdlp_resolve(
+    state: &YtmState,
+    config: &Config,
+    video_id: &str,
+    cookies: &[Cookie],
+) -> Result<Resolved> {
     let cookie_file = write_cookie_file(cookies).await?;
     let first = run_ytdlp(config, video_id, Some(&cookie_file)).await;
     tokio::fs::remove_file(&cookie_file).await.ok();
@@ -477,7 +604,12 @@ async fn resolve(
         Ok(output) if output.status.success() => output,
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            let reason = stderr.trim().lines().next().unwrap_or("exit != 0").to_string();
+            let reason = stderr
+                .trim()
+                .lines()
+                .next()
+                .unwrap_or("exit != 0")
+                .to_string();
             if cookies.is_empty() {
                 return Err(anyhow!("yt-dlp failed: {}", stderr.trim()));
             }
@@ -524,14 +656,12 @@ async fn resolve(
             .ok_or_else(|| anyhow!("unknown stream size"))?,
     };
 
-    let resolved = Resolved {
+    Ok(Resolved {
         url: info.url,
         ext: info.ext,
         size,
         at: Instant::now(),
-    };
-    state.resolved.lock().await.insert(key, resolved.clone());
-    Ok(resolved)
+    })
 }
 
 async fn probe_size(client: &reqwest::Client, url: &str) -> Option<u64> {
@@ -590,7 +720,8 @@ async fn run_ytdlp(
         .map_err(|error| anyhow!("cannot run {}: {error}", config.ytdlp_path))
 }
 
-async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {    let path =
+async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {
+    let path =
         std::env::temp_dir().join(format!("rustream-ytm-{}.txt", crate::auth::random_hex(12)));
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true).create_new(true).mode(0o600);
@@ -797,7 +928,8 @@ mod tests {
             ..Config::default()
         };
         let state = YtmState::new(None).unwrap();
-        let resolved = resolve(&state, &config, "u", "9RfVp-GhKfs", &[])
+        let db = crate::db::test_pool().await;
+        let resolved = resolve(&state, &db, &config, "u", "kJQP7kiw5Fk", &[])
             .await
             .unwrap();
         assert!(resolved.size > 100_000, "size {}", resolved.size);
@@ -848,10 +980,10 @@ mod tests {
 
     #[test]
     fn video_id_validation() {
-        assert_eq!(video_id("ytm-9RfVp-GhKfs"), Some("9RfVp-GhKfs"));
+        assert_eq!(video_id("ytm-kJQP7kiw5Fk"), Some("kJQP7kiw5Fk"));
         assert_eq!(video_id("ytm-../../etc/x"), None);
         assert_eq!(video_id("ytm-short"), None);
-        assert_eq!(video_id("9RfVp-GhKfs"), None);
+        assert_eq!(video_id("kJQP7kiw5Fk"), None);
         assert_eq!(video_id("ytm-abc.def/ghi"), None);
     }
 }

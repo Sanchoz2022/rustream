@@ -27,11 +27,11 @@ cp deploy/.env.example deploy/.env
 
 Шаги скрипта:
 
-1. `docker build -f Dockerfile` — Vite собирает UI, затем musl-бинарник.
-2. Из финального образа достаются бинарник и `static/`.
+1. `docker build -f Dockerfile` — UI из `static/` встраивается в musl-бинарник через `include_dir!`.
+2. Из финального образа достаётся только бинарник.
 3. Останавливается `rustream.service`.
 4. Делается сжатая копия базы в `/opt/rustream/backups`.
-5. Ставятся бинарник и статика, `yt-dlp` (GitHub zipapp, нужен только `python3`).
+5. Ставится бинарник, `yt-dlp` (GitHub zipapp, нужен только `python3`).
 6. `ytdlp_path` дописывается в `config.toml`, если строки ещё нет.
 7. Сервис запускается, проверяются `/api/health` и `/rest/ping.view`.
 

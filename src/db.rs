@@ -239,6 +239,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         ("users", "ytm_cookies_enc", "TEXT"),
         ("users", "ytm_account", "TEXT"),
         ("users", "ytm_updated_at", "INTEGER"),
+        // Resolved YouTube audio URLs are cached so a restart or a second
+        // device does not wait for a fresh yt-dlp run.
+        ("ytm_tracks", "resolved_url", "TEXT"),
+        ("ytm_tracks", "resolved_ext", "TEXT"),
+        ("ytm_tracks", "resolved_size", "INTEGER"),
+        ("ytm_tracks", "resolved_at", "INTEGER"),
     ] {
         if !column_exists(pool, table, column).await? {
             let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition);

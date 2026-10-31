@@ -26,22 +26,18 @@ SCP=(scp -q -o BatchMode=yes -o ConnectTimeout=10)
 echo "==> 1/8 Сборка образа (Dockerfile: UI + musl-бинарник)"
 timeout 1800 docker build -f Dockerfile -t rustream:latest .
 
-echo "==> 2/8 Извлечение бинарника и веб-интерфейса"
+echo "==> 2/8 Извлечение бинарника (UI встроен через include_dir!)"
 container=$(docker create rustream:latest)
 trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 docker cp "$container:/usr/local/bin/rustream" ./rustream-binary
-rm -rf /tmp/rustream-static && mkdir -p /tmp/rustream-static
-docker cp "$container:/opt/rustream/static/." /tmp/rustream-static/
 size=$(stat -c%s rustream-binary)
 if [ "$size" -lt 5000000 ]; then
   echo "ОШИБКА: бинарник подозрительно мал ($size байт)." >&2
   exit 1
 fi
-tar -czf /tmp/rustream-static.tgz -C /tmp/rustream-static .
 
 echo "==> 3/8 Доставка файлов"
 "${SCP[@]}" rustream-binary "$DEPLOY_SSH:/tmp/rustream-binary"
-"${SCP[@]}" /tmp/rustream-static.tgz "$DEPLOY_SSH:/tmp/rustream-static.tgz"
 
 echo "==> 4/8 Резервная копия базы и остановка сервиса"
 # The scripts run inside the container; stdin is the file, so no quoting hell.
@@ -67,8 +63,7 @@ if [ -n "$HOST_URL" ]; then
 fi
 "${SSH[@]}" "pct exec $LXC_ID -- systemctl is-active rustream"
 
-rm -f rustream-binary /tmp/rustream-static.tgz
-rm -rf /tmp/rustream-static
-"${SSH[@]}" "rm -f /tmp/rustream-binary /tmp/rustream-static.tgz"
+rm -f rustream-binary
+"${SSH[@]}" "rm -f /tmp/rustream-binary"
 
 echo "Готово${HOST_URL:+: $HOST_URL}"

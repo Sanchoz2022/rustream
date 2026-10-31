@@ -78,6 +78,9 @@ root.innerHTML = `
     </label>
 
     <div class="topbar-actions">
+      <a class="icon-btn ytm-entry" href="#/ytm" data-nav="ytm" title="YouTube Music" aria-label="YouTube Music">${icon('ytm')}</a>
+      <button class="icon-btn history-btn" data-action="history-back" title="Назад (Alt+←)" aria-label="Назад">${icon('back')}</button>
+      <button class="icon-btn history-btn" data-action="history-forward" title="Вперёд (Alt+→)" aria-label="Вперёд">${icon('next')}</button>
       <button class="icon-btn" id="rescan-btn" title="Пересканировать библиотеку">${icon('refresh')}</button>
       <button class="now-playing-pill" id="np-pill" title="Открыть плеер">
         ${icon('wave')}<span>Сейчас играет</span>
@@ -94,18 +97,12 @@ root.innerHTML = `
       <a href="#/home" data-nav="home" class="nav-item"><span class="nav-icon">${icon('home')}</span><span class="nav-label">Главная</span></a>
       <a href="#/live" data-nav="live" class="nav-item"><span class="nav-icon">${icon('radio')}</span><span class="nav-label">Live</span></a>
       <a href="#/ytm" data-nav="ytm" class="nav-item"><span class="nav-icon">${icon('ytm')}</span><span class="nav-label">YouTube</span></a>
-      <a href="#/artists" data-nav="artists" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Артисты</span></a>
-      <a href="#/albums" data-nav="albums" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Альбомы</span></a>
-      <a href="#/tracks" data-nav="tracks" class="nav-item"><span class="nav-icon">${icon('music')}</span><span class="nav-label">Треки</span></a>
+      <a href="#/library" data-nav="library" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Медиатека</span></a>
       <a href="#/stats" data-nav="stats" class="nav-item"><span class="nav-icon">${icon('chart')}</span><span class="nav-label">Статистика</span></a>
-      <a href="#/playlists" data-nav="playlists" class="nav-item"><span class="nav-icon">${icon('playlist')}</span><span class="nav-label">Плейлисты</span></a>
-      <a href="#/favorites" data-nav="favorites" class="nav-item"><span class="nav-icon">${icon('heart')}</span><span class="nav-label">Избранное</span></a>
-      <a href="#/profile" data-nav="profile" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Профиль</span></a>
+      <a href="#/search" data-nav="search" class="nav-item"><span class="nav-icon">${icon('search')}</span><span class="nav-label">Поиск</span></a>
       <div class="nav-spacer"></div>
-      <div class="nav-hint">
-        <span class="dot"></span>
-        <span>Локальная библиотека</span>
-      </div>
+      <a href="#/profile" data-nav="profile" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Профиль</span></a>
+      <button class="nav-item nav-settings" data-action="shortcuts" title="Горячие клавиши (?)"><span class="nav-icon">${icon('keyboard')}</span><span class="nav-label">Клавиши</span></button>
     </nav>
 
     <main id="view" class="view" tabindex="-1"></main>
@@ -162,9 +159,10 @@ root.innerHTML = `
 
   <nav class="tabbar" aria-label="Основное меню">
     <a href="#/home" data-tab="home" class="tab-item"><span class="tab-icon">${icon('home')}</span><span class="tab-label">Главная</span></a>
-    <a href="#/search" data-tab="search" class="tab-item"><span class="tab-icon">${icon('search')}</span><span class="tab-label">Поиск</span></a>
+    <a href="#/live" data-tab="live" class="tab-item"><span class="tab-icon">${icon('radio')}</span><span class="tab-label">Live</span></a>
     <a href="#/library" data-tab="library" class="tab-item"><span class="tab-icon">${icon('album')}</span><span class="tab-label">Медиатека</span></a>
-    <a href="#/profile" data-tab="profile" class="tab-item"><span class="tab-icon">${icon('person')}</span><span class="tab-label">Профиль</span></a>
+    <a href="#/stats" data-tab="stats" class="tab-item"><span class="tab-icon">${icon('chart')}</span><span class="tab-label">Статистика</span></a>
+    <a href="#/search" data-tab="search" class="tab-item"><span class="tab-icon">${icon('search')}</span><span class="tab-label">Поиск</span></a>
   </nav>
 
   <div class="np" id="np" hidden>
@@ -172,18 +170,27 @@ root.innerHTML = `
     <div class="np-sheet" role="dialog" aria-modal="true" aria-label="Плеер">
       <div class="np-grabber"></div>
       <div class="np-head">
-        <button class="icon-btn" data-action="close-np" title="Свернуть">${icon('close')}</button>
-        <div class="np-tabs">
-          <button class="np-tab" data-np-tab="lyrics">${icon('lyrics')}<span>Текст</span></button>
-          <button class="np-tab" data-np-tab="eq">${icon('equalizer')}<span>Эквалайзер</span></button>
-          <button class="np-tab" data-np-tab="queue">${icon('queue')}<span>Очередь</span></button>
-        </div>
+        <button class="icon-btn" data-action="close-np" title="Свернуть" aria-label="Свернуть плеер">${icon('chevronDown')}</button>
+        <span class="np-head-title" id="np-head-title">Сейчас играет</span>
         <div class="np-head-spacer"></div>
       </div>
       <div class="np-body">
         <div class="np-side" id="np-side"></div>
-        <div class="np-panel" id="np-panel"></div>
+        <div class="np-pages-viewport">
+          <div class="np-pages" id="np-pages">
+            <section class="np-page" data-page="lyrics" id="np-page-lyrics"></section>
+            <section class="np-page" data-page="queue" id="np-page-queue"></section>
+            <section class="np-page" data-page="info" id="np-page-info"></section>
+            <section class="np-page" data-page="eq" id="np-page-eq"></section>
+          </div>
+        </div>
       </div>
+      <nav class="np-tabs" role="tablist" aria-label="Панели плеера">
+        <button class="np-tab" data-np-tab="lyrics" role="tab">${icon('lyrics')}<span>Текст</span></button>
+        <button class="np-tab" data-np-tab="queue" role="tab">${icon('queue')}<span>Очередь</span></button>
+        <button class="np-tab" data-np-tab="info" role="tab">${icon('album')}<span>Инфо</span></button>
+        <button class="np-tab" data-np-tab="eq" role="tab">${icon('equalizer')}<span>Звук</span></button>
+      </nav>
       <div class="np-transport">
         <div class="np-seek-line">
           <span class="time" id="np-cur-time">0:00</span>
@@ -365,6 +372,10 @@ function pageHeader(title, subtitle, { actions = '', eyebrow = '' } = {}) {
   </header>`;
 }
 
+function shelfRow(items, render) {
+  return `<div class="shelf-row">${items.map(render).join('')}</div>`;
+}
+
 function albumCard(album) {
   return `<article class="card" data-action="open" data-href="#/album/${album.id}" tabindex="0">
     <div class="card-cover">${coverHtml(album.coverArt || album.id, { alt: album.name })}</div>
@@ -446,28 +457,84 @@ function parseRoute() {
   return { parts, params: new URLSearchParams(queryString) };
 }
 
-// Detail pages highlight the section they belong to.
-const NAV_ALIAS = { artist: 'artists', album: 'albums', playlist: 'playlists' };
-// Everything the mobile "Медиатека" tab covers.
-const LIBRARY_SECTIONS = new Set(['artists', 'albums', 'tracks', 'playlists', 'favorites', 'stats']);
+// Detail pages highlight the primary section they belong to.
+const SECTION_GROUP = {
+  artist: 'library',
+  album: 'library',
+  playlist: 'library',
+  artists: 'library',
+  albums: 'library',
+  tracks: 'library',
+  playlists: 'library',
+  favorites: 'library',
+  library: 'library',
+  ytm: 'ytm',
+  profile: 'profile',
+  live: 'live',
+  stats: 'stats',
+  search: 'search',
+  home: 'home',
+};
+// Everything the "Медиатека" tab covers.
+const LIBRARY_SECTIONS = new Set(['artists', 'albums', 'tracks', 'playlists', 'favorites', 'library']);
 
 function setActiveNav(section) {
-  const active = NAV_ALIAS[section] || section;
+  const active = SECTION_GROUP[section] || section;
   $$('.nav-item').forEach((item) => {
-    item.classList.toggle('active', item.dataset.nav === active);
+    const on = item.dataset.nav === active;
+    item.classList.toggle('active', on);
+    if (on) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
   });
   $$('.tab-item').forEach((item) => {
-    const tab = item.dataset.tab;
-    const on =
-      tab === active ||
-      (tab === 'library' && (active === 'library' || LIBRARY_SECTIONS.has(active))) ||
-      (tab === 'search' && active === 'search');
+    const on = item.dataset.tab === active;
     item.classList.toggle('active', on);
+    if (on) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
   });
+}
+
+// Where each hash was scrolled to, so back/forward returns to the same row.
+const scrollMemory = new Map();
+let restoreScrollRequested = false;
+let lastRenderedPath = '';
+const PLAYER_TABS = ['lyrics', 'queue', 'info', 'eq'];
+
+/// Keep `?player=` in the hash so a playing queue can be linked and refreshed.
+function setPlayerParam(tab, push) {
+  const raw = location.hash.replace(/^#/, '') || '/home';
+  const [path, query = ''] = raw.split('?');
+  const params = new URLSearchParams(query);
+  if (tab) params.set('player', tab);
+  else params.delete('player');
+  const search = params.toString();
+  const next = `#${path}${search ? `?${search}` : ''}`;
+  if (next === location.hash) return;
+  if (push) history.pushState(null, '', next);
+  else history.replaceState(null, '', next);
+}
+
+/// The hash decides whether the player is open; clicks only mirror it.
+function syncPlayerFromHash(params) {
+  const requested = params.get('player');
+  const valid = requested && PLAYER_TABS.includes(requested);
+  if (valid) {
+    if (!state.npOpen || state.npTab !== requested) openNowPlaying(requested, { push: false });
+  } else if (state.npOpen) {
+    closeNowPlaying({ push: false });
+  }
 }
 
 async function route() {
   const { parts, params } = parseRoute();
+
+  // `#/library?tab=albums` was the pre-deep-link form. Redirect it instead of
+  // rendering a second, subtly different library page.
+  if (parts[0] === 'library' && !parts[1] && params.get('tab')) {
+    location.replace(`#/library/${params.get('tab')}`);
+    return;
+  }
+
   const section = parts[0] || 'home';
   if (section === 'register') {
     showRegister(params.get('invite') || '');
@@ -477,9 +544,12 @@ async function route() {
     showLogin();
     return;
   }
+
+  const pathKey = location.hash || '#/home';
+  if (lastRenderedPath) scrollMemory.set(lastRenderedPath, $('#view').scrollTop);
+
   const seq = ++state.renderSeq;
   setActiveNav(section);
-  $('#view').scrollTop = 0;
 
   try {
     if (section === 'home') await renderHome(seq);
@@ -494,10 +564,16 @@ async function route() {
     else if (section === 'playlist') await renderPlaylist(seq, parts[1]);
     else if (section === 'favorites') await renderFavorites(seq);
     else if (section === 'search') await renderSearch(seq, params.get('q') || '');
-    else if (section === 'library') await renderLibrary(seq);
+    else if (section === 'library') await renderLibrary(seq, parts[1] || 'playlists');
     else if (section === 'profile') await renderProfile(seq);
-    else if (section === 'ytm') await renderYtm(seq);
+    else if (section === 'ytm') await renderYtm(seq, parts[1] || 'search');
     else await renderHome(seq);
+    if (seq !== state.renderSeq) return;
+
+    $('#view').scrollTop = restoreScrollRequested ? (scrollMemory.get(pathKey) ?? 0) : 0;
+    restoreScrollRequested = false;
+    lastRenderedPath = pathKey;
+    syncPlayerFromHash(params);
   } catch (error) {
     console.error(error);
     if (handleAuthError(error)) return;
@@ -610,19 +686,30 @@ async function renderHome(seq) {
 
   const current = player.track;
   const continueQueue = player.queue.length ? player.queue : null;
+  const heroCover = current?.coverArt || current?.albumId || recent[0]?.coverArt || recent[0]?.id;
 
   $('#view').innerHTML = `
     <div class="page home quick-home">
-      <header class="page-head home-head">
-        <div>
+      <section class="home-hero">
+        ${heroCover ? `<span class="home-hero-bg" style="background-image:url('${api.coverUrl(heroCover, 600)}')"></span>` : ''}
+        <div class="home-hero-copy">
           <span class="eyebrow"><span class="live-dot"></span>${esc(greetingForNow())}, ${esc(displayName())}</span>
           <h1>Что послушаем?</h1>
+          <p class="muted">Быстрый выбор, новые поступления и ваши любимые артисты.</p>
+          <div class="head-actions">
+            <button class="btn primary" data-action="play-all">${icon('play')} Слушать всё</button>
+            <button class="btn glass" data-action="shuffle-all">${icon('shuffle')} Перемешать</button>
+            <a class="btn ghost" href="#/live">${icon('radio')} Live</a>
+          </div>
         </div>
-        <div class="head-actions">
-          <button class="btn primary" data-action="play-all">${icon('play')} Слушать всё</button>
-          <button class="btn glass" data-action="shuffle-all">${icon('shuffle')} Перемешать</button>
-        </div>
-      </header>
+        <nav class="home-chips" aria-label="Быстрые разделы">
+          <a class="chip active" href="#/home" aria-current="page">Все</a>
+          <a class="chip" href="#/library/recent">Новинки</a>
+          <a class="chip" href="#/library/favorites">Избранное</a>
+          <a class="chip" href="#/library/artists">Артисты</a>
+          <a class="chip" href="#/live">Live</a>
+        </nav>
+      </section>
 
       ${
         current
@@ -677,7 +764,7 @@ async function renderHome(seq) {
           </div>
           <a class="text-link" href="#/albums">Все альбомы ${icon('next')}</a>
         </div>
-        <div class="grid cards">${recent.slice(0, 8).map(albumCard).join('')}</div>
+        ${shelfRow(recent.slice(0, 12), albumCard)}
       </section>
 
       ${
@@ -703,7 +790,7 @@ async function renderHome(seq) {
           </div>
           <a class="text-link" href="#/artists">Все артисты ${icon('next')}</a>
         </div>
-        <div class="grid cards artists-row">${artists.slice(0, 8).map(artistCard).join('')}</div>
+        ${shelfRow(artists.slice(0, 12), artistCard)}
       </section>
 
       <section class="section home-cta">
@@ -1392,7 +1479,9 @@ function closeModal() {
 // Now playing panel
 // ---------------------------------------------------------------------------
 
-function openNowPlaying(tab = 'lyrics') {
+function openNowPlaying(tab = 'lyrics', { push = true } = {}) {
+  const wasOpen = state.npOpen;
+  const previousTab = state.npTab;
   state.npOpen = true;
   state.npTab = tab;
   const np = $('#np');
@@ -1401,11 +1490,19 @@ function openNowPlaying(tab = 'lyrics') {
   // timeout for browsers that throttle rAF in background tabs.
   requestAnimationFrame(() => np.classList.add('open'));
   setTimeout(() => np.classList.add('open'), 80);
+  if (!wasOpen) {
+    if (push) setPlayerParam(tab, true);
+  } else if (previousTab !== tab) {
+    setPlayerParam(tab, false);
+  }
   renderNowPlaying();
 }
 
-function closeNowPlaying() {
+function closeNowPlaying({ push = true } = {}) {
+  const wasOpen = state.npOpen;
   state.npOpen = false;
+  npRenderedTrack = null;
+  if (wasOpen && push) setPlayerParam(null, false);
   const np = $('#np');
   np.classList.remove('open');
   setTimeout(() => {
@@ -1414,17 +1511,51 @@ function closeNowPlaying() {
 }
 
 function setNpTab(tab) {
+  if (!NP_PAGES.includes(tab)) return;
+  if (!state.npOpen) {
+    openNowPlaying(tab);
+    return;
+  }
   state.npTab = tab;
-  renderNowPlaying();
+  setPlayerParam(tab, false);
+  updateNpTabs();
+  moveNpPager();
+}
+
+const NP_PAGES = ['lyrics', 'queue', 'info', 'eq'];
+// Track id + whether the carousel pages were already built and bound.
+let npRenderedTrack = null;
+
+function updateNpTabs() {
+  $$('.np-tab').forEach((tab) => {
+    const on = tab.dataset.npTab === state.npTab;
+    tab.classList.toggle('active', on);
+    tab.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+/// The four pages sit side by side; switching tabs only slides the strip, so
+/// lyrics are not re-fetched and the queue keeps its scroll position.
+function moveNpPager() {
+  const pages = $('#np-pages');
+  if (!pages) return;
+  const index = Math.max(0, NP_PAGES.indexOf(state.npTab));
+  pages.style.setProperty('--np-page', String(index));
+}
+
+function renderNpPage(name, track) {
+  const page = $(`#np-page-${name}`);
+  if (!page) return;
+  if (name === 'lyrics') renderLyricsPanel(page, track);
+  else if (name === 'eq') renderEqPanel(page);
+  else if (name === 'info') renderInfoPanel(page, track);
+  else renderQueuePanel(page);
 }
 
 function renderNowPlaying() {
   if (!state.npOpen) return;
   const track = player.track;
-  $$('.np-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.npTab === state.npTab));
-  // На телефоне обложка во весь экран оставляет очередь без места, поэтому
-  // для «Очереди» и «Эквалайзера» шапка сжимается до строки.
-  $('#np').classList.toggle('compact', state.npTab !== 'lyrics');
+  updateNpTabs();
 
   const side = $('#np-side');
   side.innerHTML = `
@@ -1456,10 +1587,12 @@ function renderNowPlaying() {
       </div>
     </div>`;
 
-  const panel = $('#np-panel');
-  if (state.npTab === 'lyrics') renderLyricsPanel(panel, track);
-  else if (state.npTab === 'eq') renderEqPanel(panel);
-  else renderQueuePanel(panel);
+  const trackId = track?.id || '';
+  if (npRenderedTrack !== trackId) {
+    npRenderedTrack = trackId;
+    for (const page of NP_PAGES) renderNpPage(page, track);
+  }
+  moveNpPager();
 }
 
 async function renderLyricsPanel(panel, track) {
@@ -1546,6 +1679,32 @@ function highlightLyrics() {
 
 function emptyPanel(iconName, title, text) {
   return `<div class="panel-empty"><span class="empty-icon">${icon(iconName)}</span><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
+}
+
+function renderInfoPanel(panel, track) {
+  if (!track) {
+    panel.innerHTML = emptyPanel('album', 'Нет активного трека', 'Включите трек, чтобы увидеть его параметры.');
+    return;
+  }
+  const rows = [
+    ['Исполнитель', track.artist || '—'],
+    ['Альбом', track.album || '—'],
+    ['Год', track.year || '—'],
+    ['Формат', (track.suffix || 'flac').toUpperCase()],
+    ['Битрейт', track.bitRate ? `${track.bitRate} kbps` : 'lossless'],
+    ['Размер', track.size ? formatBytes(track.size) : '—'],
+    ['Длительность', formatTime(track.duration)],
+    ['Источник', track.source === 'ytm' ? 'YouTube Music' : 'Локальная библиотека'],
+  ];
+  panel.innerHTML = `
+    <div class="panel-title"><h3>О треке</h3><span class="muted">${esc(track.title || '')}</span></div>
+    <div class="info-list">${rows
+      .map(([key, value]) => `<div class="info-row"><span>${esc(key)}</span><strong>${esc(value)}</strong></div>`)
+      .join('')}</div>
+    <div class="np-info-actions">
+      <button class="btn glass" data-action="jump-album" ${track.albumId ? '' : 'disabled'}>${icon('album')} Открыть альбом</button>
+      <button class="btn ghost" data-action="shortcuts">${icon('keyboard')} Горячие клавиши</button>
+    </div>`;
 }
 
 function renderEqPanel(panel) {
@@ -1697,7 +1856,7 @@ function updateMediaSession(track) {
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', () => player.play());
   navigator.mediaSession.setActionHandler('pause', () => player.pause());
-  navigator.mediaSession.setActionHandler('previoustrack', () => player.prev());
+  navigator.mediaSession.setActionHandler('previoustrack', () => player.previous());
   navigator.mediaSession.setActionHandler('nexttrack', () => player.next());
   navigator.mediaSession.setActionHandler('seekto', (details) => {
     if (details.seekTime !== undefined) {
@@ -2653,25 +2812,64 @@ function invitesHtml(invites) {
 // Library hub (mobile tab "Медиатека")
 // ---------------------------------------------------------------------------
 
-async function renderLibrary(seq) {
+const LIBRARY_TABS = [
+  { id: 'playlists', label: 'Плейлисты' },
+  { id: 'albums', label: 'Альбомы' },
+  { id: 'artists', label: 'Артисты' },
+  { id: 'tracks', label: 'Треки' },
+  { id: 'favorites', label: 'Избранное' },
+  { id: 'recent', label: 'Недавние' },
+];
+
+async function renderLibrary(seq, tab = 'playlists') {
   showLoading();
-  const [stats, playlists] = await Promise.all([
+  if (!LIBRARY_TABS.some((item) => item.id === tab)) tab = 'playlists';
+
+  const [stats, playlists, albums, artists, tracks, favorites, recent] = await Promise.all([
     loadStats().catch(() => ({})),
-    api.getPlaylists().catch(() => []),
+    tab === 'playlists' ? api.getPlaylists().catch(() => []) : Promise.resolve(null),
+    tab === 'albums' ? loadAlbums() : Promise.resolve(null),
+    tab === 'artists' ? loadArtists() : Promise.resolve(null),
+    tab === 'tracks' ? loadAllTracks() : Promise.resolve(null),
+    tab === 'favorites' ? loadFavorites() : Promise.resolve(null),
+    tab === 'recent' ? api.getAlbums('newest', 40).catch(() => []) : Promise.resolve(null),
   ]);
   if (seq !== state.renderSeq) return;
-  cache.playlists = playlists;
 
-  const tiles = [
-    { href: '#/artists', icon: 'person', title: 'Артисты', sub: `${stats.artists || 0} в библиотеке` },
-    { href: '#/albums', icon: 'album', title: 'Альбомы', sub: `${stats.albums || 0} в библиотеке` },
-    { href: '#/tracks', icon: 'music', title: 'Треки', sub: `${stats.tracks || 0} в библиотеке` },
-    { href: '#/playlists', icon: 'playlist', title: 'Плейлисты', sub: `${playlists.length} ${plural(playlists.length, 'подборка', 'подборки', 'подборок')}` },
-    { href: '#/favorites', icon: 'heart', title: 'Избранное', sub: 'Треки, которым вы поставили лайк' },
-    { href: '#/ytm', icon: 'ytm', title: 'YouTube Music', sub: 'Внешний источник: история, лайки, поиск' },
-    { href: '#/live', icon: 'radio', title: 'Live', sub: 'Персональный поток без повторов' },
-    { href: '#/stats', icon: 'chart', title: 'Статистика', sub: 'Часы, артисты и история' },
-  ];
+  let content = '';
+  let count = 0;
+  let actions = '';
+  if (tab === 'playlists') {
+    cache.playlists = playlists;
+    count = playlists.length;
+    actions = `<button class="btn primary" data-action="new-playlist">${icon('add')} Новый плейлист</button>`;
+    content = playlists.length
+      ? `<div class="grid cards">${playlists.map(playlistCard).join('')}</div>`
+      : `<div class="empty-state"><span class="empty-icon">${icon('playlist')}</span><h2>Плейлистов пока нет</h2><p>Соберите подборку из любимых треков.</p><button class="btn primary" data-action="new-playlist">${icon('add')} Создать</button></div>`;
+  } else if (tab === 'albums' || tab === 'recent') {
+    const list = tab === 'albums' ? albums : recent;
+    count = list.length;
+    state.currentTracks = [];
+    content = `<div class="grid cards">${list.map(albumCard).join('')}</div>`;
+  } else if (tab === 'artists') {
+    count = artists.length;
+    state.currentTracks = [];
+    content = `<div class="grid cards">${artists.map(artistCard).join('')}</div>`;
+  } else if (tab === 'tracks') {
+    count = tracks.length;
+    state.currentTracks = tracks;
+    content = trackList(tracks, { showCover: true });
+    actions = `<button class="btn primary" data-action="play-all">${icon('play')} Слушать</button>
+               <button class="btn glass" data-action="shuffle-all">${icon('shuffle')} Перемешать</button>`;
+  } else if (tab === 'favorites') {
+    const songs = favorites.song || [];
+    count = songs.length;
+    state.currentTracks = songs;
+    content = songs.length
+      ? trackList(songs, { showCover: true })
+      : `<div class="empty-state"><span class="empty-icon">${icon('heartOutline')}</span><h2>Здесь пока пусто</h2><p>Нажимайте на сердечко у трека, чтобы добавить его в избранное.</p></div>`;
+    actions = songs.length ? `<button class="btn primary" data-action="play-all">${icon('play')} Слушать</button>` : '';
+  }
 
   $('#view').innerHTML = `
     <div class="page library-page">
@@ -2681,20 +2879,17 @@ async function renderLibrary(seq) {
           <h1>Медиатека</h1>
           <p class="muted">${stats.tracks || 0} ${plural(stats.tracks || 0, 'трек', 'трека', 'треков')} · ${formatBytes(stats.sizeBytes || 0)}</p>
         </div>
-        <div class="head-actions">
-          <button class="btn glass" data-action="shuffle-library">${icon('shuffle')} Перемешать всё</button>
-        </div>
+        ${actions ? `<div class="head-actions">${actions}</div>` : ''}
       </header>
-      <div class="library-grid">
-        ${tiles
-          .map(
-            (tile) => `<a class="library-tile" href="${tile.href}">
-              <span class="tile-icon">${icon(tile.icon)}</span>
-              <span class="tile-main"><strong>${tile.title}</strong><small>${esc(tile.sub)}</small></span>
-              <span class="tile-arrow">${icon('next')}</span>
-            </a>`,
-          )
-          .join('')}
+
+      <nav class="library-tabs" aria-label="Разделы медиатеки">
+        ${LIBRARY_TABS.map(
+          (item) => `<a href="#/library/${item.id}" class="library-tab ${item.id === tab ? 'active' : ''}" ${item.id === tab ? 'aria-current="page"' : ''}>${item.label}</a>`,
+        ).join('')}
+      </nav>
+
+      <div class="library-content" data-library-tab="${tab}">
+        ${content}
       </div>
     </div>`;
 }
@@ -2809,8 +3004,27 @@ async function renderProfile(seq) {
 // YouTube Music
 // ---------------------------------------------------------------------------
 
-async function renderYtm(seq) {
+const YTM_TABS = [
+  { id: 'search', label: 'Поиск' },
+  { id: 'liked', label: 'Лайки' },
+  { id: 'history', label: 'История' },
+  { id: 'connect', label: 'Подключение' },
+];
+
+function ytmTabsHtml(tab) {
+  return `<nav class="library-tabs ytm-tabs" aria-label="Разделы YouTube Music">
+    ${YTM_TABS.map(
+      (item) =>
+        `<a href="#/ytm/${item.id}" class="library-tab ${item.id === tab ? 'active' : ''}" ${
+          item.id === tab ? 'aria-current="page"' : ''
+        }>${item.label}</a>`,
+    ).join('')}
+  </nav>`;
+}
+
+async function renderYtm(seq, tab = 'search') {
   showLoading();
+  if (!YTM_TABS.some((item) => item.id === tab)) tab = 'search';
   const status = state.ytmStatus || (await api.getYtmStatus().catch(() => null));
   if (seq !== state.renderSeq) return;
   state.ytmStatus = status;
@@ -2821,10 +3035,11 @@ async function renderYtm(seq) {
         <header class="page-head">
           <div><span class="eyebrow">Источник</span><h1>YouTube Music</h1></div>
         </header>
+        ${ytmTabsHtml(tab)}
         <section class="section glass-card empty-state">
           <span class="empty-icon">${icon('ytm')}</span>
           <h2>Подключите свой аккаунт</h2>
-          <p class="muted">Поиск и лайки YouTube Music будут доступны только вам. Подключение занимает минуту.</p>
+          <p class="muted">Поиск и лайки YouTube Music будут доступны только вам. Нужны cookies с music.youtube.com — вставьте их в профиле, подключение занимает минуту.</p>
           <a class="btn primary" href="#/profile">${icon('settings')} Перейти в профиль</a>
         </section>
       </div>`;
@@ -2849,6 +3064,9 @@ async function renderYtm(seq) {
         </div>
       </header>
 
+      ${ytmTabsHtml(tab)}
+
+      <div class="ytm-panel" data-ytm-panel="search">
       <form id="ytm-search-form" class="search-row">
         <label class="searchbox glass">
           ${icon('search')}
@@ -2875,8 +3093,9 @@ async function renderYtm(seq) {
       </div>
 
       <section class="section" id="ytm-results" hidden></section>
+      </div>
 
-      <section class="section" id="ytm-history-section" hidden>
+      <section class="section" data-ytm-panel="history" id="ytm-history-section" hidden>
         <div class="section-head">
           <div>
             <h2>${icon('ytm')} Недавно из YouTube</h2>
@@ -2886,7 +3105,7 @@ async function renderYtm(seq) {
         <div id="ytm-history"></div>
       </section>
 
-      <section class="section" id="ytm-liked-section" hidden>
+      <section class="section" data-ytm-panel="liked" id="ytm-liked-section" hidden>
         <div class="section-head">
           <div>
             <h2>${icon('heart')} Мои лайки</h2>
@@ -2959,7 +3178,12 @@ async function renderYtm(seq) {
     }, 500);
   });
 
-  // Главная вкладки: история из локальной БД + лайки из YouTube.
+  // Panels follow the URL tab; data itself is loaded once for both lists.
+  $$('[data-ytm-panel]').forEach((panel) => {
+    if (panel.dataset.ytmPanel === 'search') panel.hidden = tab !== 'search';
+    else panel.hidden = panel.dataset.ytmPanel !== tab;
+  });
+
   (async () => {
     const [history, liked] = await Promise.allSettled([api.ytmHistory(40), api.ytmLiked(50)]);
     if (seq !== state.renderSeq) return;
@@ -2973,8 +3197,18 @@ async function renderYtm(seq) {
       setSection('#ytm-liked-section', 'liked', liked.value);
     }
 
-    const nothing = !state.ytmLists.history.length && !state.ytmLists.liked.length;
-    if (nothing) $('#ytm-empty').hidden = false;
+    const emptyForTab =
+      (tab === 'history' && !state.ytmLists.history.length) ||
+      (tab === 'liked' && !state.ytmLists.liked.length);
+    if (emptyForTab) {
+      const section = $(tab === 'history' ? '#ytm-history-section' : '#ytm-liked-section');
+      if (section) {
+        section.hidden = false;
+        const host = section.querySelector('div[id]') || section;
+        host.innerHTML = `<div class="empty-inline">Пока пусто — найдите трек на вкладке «Поиск».</div>`;
+      }
+    }
+    if (tab === 'search') $('#ytm-empty').hidden = true;
   })();
 }
 
@@ -3014,6 +3248,9 @@ document.addEventListener('click', async (event) => {
     if (!list?.length) return;
     setLiveMode(false);
     await player.playTracks(list, index);
+    // YouTube resolves each track with a separate yt-dlp run; warming the next
+    // two makes "play" feel instant instead of a three-second wait.
+    api.ytmPrefetch(list.slice(index + 1, index + 3).map((track) => track.id));
     return;
   }
   if (action === 'play-all') {
@@ -3044,6 +3281,18 @@ document.addEventListener('click', async (event) => {
   }
   if (action === 'open-settings') {
     await openSettings();
+    return;
+  }
+  if (action === 'shortcuts') {
+    openShortcuts();
+    return;
+  }
+  if (action === 'history-back') {
+    history.back();
+    return;
+  }
+  if (action === 'history-forward') {
+    history.forward();
     return;
   }
   if (action === 'theme') {
@@ -3277,14 +3526,14 @@ document.addEventListener('click', async (event) => {
   if (action === 'reload') return route();
   if (action === 'reset-eq') {
     player.resetEq();
-    renderEqPanel($('#np-panel'));
+    renderEqPanel($('#np-page-eq'));
     return;
   }
   if (action === 'refresh-lyrics') {
     if (!player.track) return;
     state.lyricsRefresh = true;
     state.lyricsTrackId = null;
-    renderLyricsPanel($('#np-panel'), player.track);
+    renderLyricsPanel($('#np-page-lyrics'), player.track);
     return;
   }
 });
@@ -3297,7 +3546,7 @@ $('#np').addEventListener('click', (event) => {
   const preset = event.target.closest('[data-eq-preset]');
   if (preset) {
     player.applyEqPreset(preset.dataset.eqPreset);
-    renderEqPanel($('#np-panel'));
+    renderEqPanel($('#np-page-eq'));
   }
 });
 
@@ -3332,8 +3581,103 @@ $('#volume').addEventListener('input', (event) => {
 });
 
 // Keyboard
+const PRIMARY_TABS = ['home', 'live', 'library', 'stats', 'search'];
+const PRIMARY_ROUTES = {
+  home: '#/home',
+  live: '#/live',
+  library: '#/library/playlists',
+  stats: '#/stats',
+  search: '#/search',
+};
+let pendingG = 0;
+
+function isTyping(event) {
+  const el = event.target;
+  return (
+    ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName) ||
+    el?.isContentEditable ||
+    el?.closest?.('[contenteditable="true"]')
+  );
+}
+
+function focusableElements() {
+  return $$(
+    '#view a[href], #view button:not([disabled]), #view [tabindex="0"], ' +
+      '#playerbar button:not([disabled]), #playerbar input:not([disabled]), ' +
+      '.tabbar a[href], .nav a[href], .nav button:not([disabled])',
+  ).filter((el) => el.offsetParent !== null && el.getAttribute('aria-hidden') !== 'true');
+}
+
+function moveFocus(direction) {
+  const list = focusableElements();
+  if (!list.length) return;
+  const index = list.indexOf(document.activeElement);
+  let next;
+  if (index === -1) next = direction > 0 ? 0 : list.length - 1;
+  else next = (index + direction + list.length) % list.length;
+  list[next].focus({ preventScroll: false });
+}
+
+function primarySection() {
+  const { parts } = parseRoute();
+  return SECTION_GROUP[parts[0] || 'home'] || 'home';
+}
+
+function openShortcuts() {
+  const rows = [
+    ['Tab / Shift+Tab', 'Следующий / предыдущий элемент'],
+    ['Стрелки', 'Перемещение по интерфейсу'],
+    ['Enter / Space', 'Нажать выбранный элемент'],
+    ['Alt+← / Alt+→', 'Назад / вперёд по истории'],
+    ['Ctrl+K или /', 'Поиск'],
+    ['Space', 'Пауза / продолжить'],
+    ['Shift+← / →', 'Перемотка на 5 секунд'],
+    ['L / D', 'Лайк / дизлайк трека'],
+    ['N / P', 'Следующий / предыдущий трек'],
+    ['Q', 'Очередь'],
+    ['F', 'Полноэкранный плеер'],
+    ['M', 'Звук'],
+    ['S / R', 'Перемешать / повтор'],
+    ['G, затем H/L/S/T', 'Главная / Live / Статистика / Медиатека'],
+    ['?', 'Эта справка'],
+    ['Esc', 'Закрыть панель или окно'],
+  ];
+  showModal({
+    title: 'Горячие клавиши',
+    body: `<div class="shortcut-grid">${rows
+      .map(
+        ([keys, text]) => `<div class="shortcut-row"><span class="shortcut-keys">${keys
+          .split(' / ')
+          .map((key) => `<kbd>${esc(key)}</kbd>`)
+          .join(' ')}</span><span>${esc(text)}</span></div>`,
+      )
+      .join('')}</div>
+      <p class="muted small">На телефоне: свайп влево/вправо между разделами, свайп вверх по мини-плееру — открыть, вниз — закрыть. Свайп по обложке переключает трек, двойной тап ставит лайк.</p>`,
+  });
+}
+
 document.addEventListener('keydown', (event) => {
-  const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+  const typing = isTyping(event);
+  const active = document.activeElement;
+
+  if (event.altKey && event.key === 'ArrowLeft') {
+    event.preventDefault();
+    history.back();
+    return;
+  }
+  if (event.altKey && event.key === 'ArrowRight') {
+    event.preventDefault();
+    history.forward();
+    return;
+  }
+
+  if (!typing && ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key) && !event.shiftKey) {
+    if (!active?.matches?.('input[type="range"]')) {
+      event.preventDefault();
+      moveFocus(event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1);
+      return;
+    }
+  }
 
   if (event.code === 'Space' && !typing && player.track) {
     event.preventDefault();
@@ -3341,48 +3685,84 @@ document.addEventListener('keydown', (event) => {
   }
   if (event.key === 'ArrowRight' && !typing && event.shiftKey) player.seekBy(5);
   if (event.key === 'ArrowLeft' && !typing && event.shiftKey) player.seekBy(-5);
-  
-  // Новые хоткеи
+
   if (!typing) {
-    // L → лайк текущего трека
+    if (event.key === '?') {
+      event.preventDefault();
+      openShortcuts();
+      return;
+    }
+    if (event.key === '/') {
+      event.preventDefault();
+      ($('#page-search-input') || $('#search-input'))?.focus();
+      return;
+    }
+    if (event.key.toLowerCase() === 'g') {
+      pendingG = Date.now();
+      return;
+    }
+    if (pendingG && Date.now() - pendingG < 900) {
+      const target = {
+        h: PRIMARY_ROUTES.home,
+        l: PRIMARY_ROUTES.live,
+        s: PRIMARY_ROUTES.stats,
+        t: '#/library/tracks',
+        m: PRIMARY_ROUTES.library,
+        p: '#/profile',
+      }[event.key.toLowerCase()];
+      pendingG = 0;
+      if (target) {
+        event.preventDefault();
+        location.hash = target;
+        return;
+      }
+    }
     if (event.key.toLowerCase() === 'l' && player.track) {
       event.preventDefault();
       toggleLike(player.track.id);
     }
-    // N → следующий трек
+    if (event.key.toLowerCase() === 'd' && player.track) {
+      event.preventDefault();
+      toggleDislike(player.track.id);
+    }
     if (event.key.toLowerCase() === 'n') {
       event.preventDefault();
       player.next();
     }
-    // P → предыдущий трек (только если не Ctrl+P для печати)
     if (event.key.toLowerCase() === 'p' && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      player.prev();
+      player.previous();
     }
-    // M → mute/unmute
     if (event.key.toLowerCase() === 'm') {
       event.preventDefault();
       player.toggleMute();
     }
-    // S → shuffle
     if (event.key.toLowerCase() === 's') {
       event.preventDefault();
       player.toggleShuffle();
     }
-    // R → repeat
     if (event.key.toLowerCase() === 'r') {
       event.preventDefault();
-      player.toggleRepeat();
+      player.cycleRepeat();
+    }
+    if (event.key.toLowerCase() === 'q') {
+      event.preventDefault();
+      openNowPlaying('queue');
+    }
+    if (event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      if (state.npOpen) closeNowPlaying();
+      else openNowPlaying('lyrics');
     }
   }
-  
+
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
-    $('#search-input').focus();
+    ($('#page-search-input') || $('#search-input'))?.focus();
   }
   if (event.key === 'Escape') {
     if ($('#modal-root').innerHTML) closeModal();
-    else closeNowPlaying();
+    else if (state.npOpen) closeNowPlaying();
   }
 });
 
@@ -3437,6 +3817,91 @@ if (npSheet) {
     }
   });
 }
+
+// Horizontal swipes: between primary tabs, edge-swipe back, artwork next/prev.
+let viewSwipe = null;
+
+$('#view').addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  if (e.target.closest('.shelf-row, .library-tabs, .chip-row, input, textarea, select, .seek, .eq-track')) return;
+  viewSwipe = {
+    x: e.touches[0].clientX,
+    y: e.touches[0].clientY,
+    time: Date.now(),
+  };
+}, { passive: true });
+
+$('#view').addEventListener('touchend', (e) => {
+  if (!viewSwipe) return;
+  const dx = e.changedTouches[0].clientX - viewSwipe.x;
+  const dy = e.changedTouches[0].clientY - viewSwipe.y;
+  const elapsed = Date.now() - viewSwipe.time;
+  const startX = viewSwipe.x;
+  viewSwipe = null;
+  if (elapsed > 600 || Math.abs(dx) < 70 || Math.abs(dy) > 55) return;
+
+  // Right swipe from the left edge = browser back, like a native app.
+  if (startX <= 28 && dx > 0) {
+    history.back();
+    return;
+  }
+
+  const current = primarySection();
+  const index = PRIMARY_TABS.indexOf(current);
+  if (index === -1) return;
+  const nextIndex = dx < 0 ? index + 1 : index - 1;
+  if (nextIndex < 0 || nextIndex >= PRIMARY_TABS.length) return;
+  location.hash = PRIMARY_ROUTES[PRIMARY_TABS[nextIndex]];
+}, { passive: true });
+
+// Swipe the pages strip left/right: Текст → Очередь → Инфо → Звук.
+let npPagesSwipe = null;
+$('#np-pages').addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  npPagesSwipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+}, { passive: true });
+$('#np-pages').addEventListener('touchend', (e) => {
+  if (!npPagesSwipe) return;
+  const dx = e.changedTouches[0].clientX - npPagesSwipe.x;
+  const dy = e.changedTouches[0].clientY - npPagesSwipe.y;
+  const elapsed = Date.now() - npPagesSwipe.time;
+  npPagesSwipe = null;
+  if (elapsed > 700 || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+  const index = NP_PAGES.indexOf(state.npTab);
+  const next = dx < 0 ? index + 1 : index - 1;
+  if (next < 0 || next >= NP_PAGES.length) return;
+  e.preventDefault();
+  setNpTab(NP_PAGES[next]);
+}, { passive: false });
+
+let npCoverSwipe = null;
+let npLastTap = 0;
+$('#np').addEventListener('touchstart', (e) => {
+  if (!e.target.closest('.np-cover')) return;
+  npCoverSwipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+}, { passive: true });
+$('#np').addEventListener('touchend', (e) => {
+  if (!e.target.closest('.np-cover') || !npCoverSwipe) return;
+  const dx = e.changedTouches[0].clientX - npCoverSwipe.x;
+  const dy = e.changedTouches[0].clientY - npCoverSwipe.y;
+  const elapsed = Date.now() - npCoverSwipe.time;
+  npCoverSwipe = null;
+  if (elapsed > 600) return;
+  if (Math.abs(dx) > 60 && Math.abs(dy) < 60) {
+    e.preventDefault();
+    if (dx < 0) player.next();
+    else player.previous();
+    return;
+  }
+  const now = Date.now();
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20 && now - npLastTap < 300) {
+    if (player.track) toggleLike(player.track.id);
+    renderNowPlaying();
+    npLastTap = 0;
+  } else {
+    npLastTap = now;
+  }
+}, { passive: false });
 
 // Double-tap on cover → like
 let lastTapTime = 0;
@@ -3597,7 +4062,7 @@ player.addEventListener('state', updatePlayState);
 player.addEventListener('mode', updateModeUi);
 player.addEventListener('volume', updateVolumeUi);
 player.addEventListener('eq', () => {
-  if (state.npTab === 'eq' && state.npOpen) renderEqPanel($('#np-panel'));
+  if (state.npTab === 'eq' && state.npOpen) renderEqPanel($('#np-page-eq'));
 });
 player.addEventListener('error', (event) => toast(event.detail, 'error'));
 
@@ -3613,6 +4078,10 @@ document.addEventListener(
 );
 
 window.addEventListener('hashchange', route);
+// popstate fires before hashchange on back/forward; flag the scroll restore.
+window.addEventListener('popstate', () => {
+  restoreScrollRequested = true;
+});
 
 // Live auto-refill: when the queue ends, ask the server for the next batch.
 player.addEventListener('queueend', async () => {

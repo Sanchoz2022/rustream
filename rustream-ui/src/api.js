@@ -336,6 +336,15 @@ export function disconnectYtm() {
   return jsonFetch('/api/me/ytm', { method: 'DELETE' });
 }
 
+/** Warm the next YouTube tracks so playback does not wait for yt-dlp. */
+export async function ytmPrefetch(ids) {
+  if (!Array.isArray(ids) || !ids.length) return null;
+  return jsonFetch('/api/ytm/prefetch', {
+    method: 'POST',
+    body: JSON.stringify({ ids: ids.slice(0, 4) }),
+  }).catch(() => null);
+}
+
 export async function ytmSearch(query, limit = 40) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   const data = await jsonFetch(`/api/ytm/search?${params.toString()}`);
