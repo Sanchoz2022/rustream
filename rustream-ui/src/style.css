@@ -577,23 +577,42 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 8px;
+  padding: 14px 10px;
   background: var(--surface);
   border-right: 1px solid var(--outline-variant);
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.nav-item {
+/* Feishin-подобные группы: «Моя библиотека», «Онлайн», служебные пункты внизу. */
+.nav-group {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  margin-bottom: 14px;
+}
+
+.nav-group-title {
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-faint);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 56px;
-  padding: 4px 2px;
-  border-radius: var(--shape-lg);
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
   color: var(--on-surface-variant);
+  font-size: 13px;
+  font-weight: 500;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 
@@ -613,15 +632,18 @@ h3 {
 }
 
 .nav-icon .icon {
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
 }
 
 .nav-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-item.active .nav-label {
@@ -1107,10 +1129,60 @@ textarea.input {
 
 .page-head {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
   margin-bottom: 28px;
+}
+
+/* Крупная круглая кнопка воспроизведения рядом с заголовком, как в Feishin. */
+.page-play {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 10px 24px -12px rgb(0 0 0 / 65%);
+  transition: transform var(--dur) var(--ease), filter var(--dur) var(--ease);
+}
+
+.page-play:hover {
+  transform: scale(1.05);
+  filter: brightness(1.05);
+}
+
+.page-play .icon {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+}
+
+.page-head-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.page-head-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--shape-full);
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .page-head .muted {
@@ -1978,15 +2050,199 @@ textarea.input {
   gap: 8px;
 }
 
+/* --- Settings dialog: two panes ----------------------------------------- */
+
+.modal.modal-wide .modal-card {
+  width: min(900px, 100%);
+}
+
+.modal.modal-wide .modal-body {
+  padding: 0 24px 22px;
+}
+
+.modal.modal-wide .modal-head {
+  padding: 20px 24px 14px;
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.settings-nav-item .icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.settings-nav-item:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.settings-nav-item.active {
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+}
+
+.settings-nav-item.active .icon {
+  color: var(--primary);
+}
+
+.settings-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-panel h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-panel h4 .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-faint);
+}
+
+.settings-sub-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.settings-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--on-surface-faint);
+}
+
+.settings-key {
+  flex: 1;
+  min-width: 180px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .modal.modal-wide .modal-body {
+    padding: 0 16px 16px;
+  }
+
+  .modal.modal-wide .modal-head {
+    padding: 16px 16px 10px;
+  }
+
+  .settings-shell {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-nav-item {
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+}
+
 .user-row,
 .user-create {
   display: flex;
+  /* `.user-create` also carries `.settings-form`, which is a column. */
+  flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
   padding: 10px 12px;
   border-radius: var(--shape-sm);
   background: var(--surface-container-high);
+}
+
+.user-create .field {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+/* The form itself sits on `surface-container-high`, the same colour the inputs
+   use by default — without a border they disappear into the panel. */
+.user-create .input {
+  background: var(--surface-container-highest);
+  border-color: var(--outline-variant);
+}
+
+.user-create .checkline {
+  flex: 1 1 100%;
+}
+
+.user-create .btn {
+  flex: 0 0 auto;
 }
 
 .user-row-main {
@@ -2693,10 +2949,16 @@ textarea.input {
   cursor: pointer;
 }
 
+/* Track is split at the current value: filled part is accent, rest is outline.
+   Without it a dark theme shows only a lone thumb with no scale. */
 .volume input[type='range']::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 6px;
   border-radius: var(--shape-full);
-  background: var(--outline);
+  background: linear-gradient(
+    to right,
+    var(--primary) 0 var(--volume-fill, 50%),
+    var(--outline) var(--volume-fill, 50%) 100%
+  );
 }
 
 /* Ползунок виден всегда: иначе непонятно, где начало, где конец. */
@@ -2717,9 +2979,15 @@ textarea.input {
 }
 
 .volume input[type='range']::-moz-range-track {
-  height: 4px;
+  height: 6px;
   border-radius: var(--shape-full);
   background: var(--outline);
+}
+
+.volume input[type='range']::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--shape-full);
+  background: var(--primary);
 }
 
 .volume input[type='range']::-moz-range-thumb {
@@ -2959,9 +3227,14 @@ textarea.input {
 }
 
 .np-volume input[type='range']::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 6px;
   border-radius: var(--shape-full);
-  background: var(--surface-container-highest);
+  background: linear-gradient(
+    to right,
+    var(--primary) 0 var(--volume-fill, 50%),
+    var(--surface-container-highest) var(--volume-fill, 50%) 100%
+  );
+  box-shadow: inset 0 0 0 1px var(--outline);
 }
 
 .np-volume input[type='range']::-webkit-slider-thumb {
@@ -2979,6 +3252,19 @@ textarea.input {
   height: 14px;
   border: 2px solid var(--surface-container);
   border-radius: 50%;
+  background: var(--primary);
+}
+
+.np-volume input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: var(--shape-full);
+  background: var(--surface-container-highest);
+  box-shadow: inset 0 0 0 1px var(--outline);
+}
+
+.np-volume input[type='range']::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--shape-full);
   background: var(--primary);
 }
 
@@ -3045,6 +3331,13 @@ textarea.input {
   font-size: 11px;
   color: var(--on-surface-faint);
   margin-top: 6px;
+}
+
+/* Текст найден в интернете и сохранён сервером рядом с аудиофайлом. */
+.lyrics-saved {
+  font-size: 11px;
+  color: var(--secondary);
+  white-space: nowrap;
 }
 
 /* Equalizer */
@@ -3265,6 +3558,7 @@ textarea.input {
   z-index: 200;
   display: grid;
   place-items: center;
+  align-content: center;
   padding: 20px;
 }
 
@@ -3274,15 +3568,23 @@ textarea.input {
   background: rgba(0, 0, 0, 0.6);
 }
 
-.modal-body {
+.modal-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: min(460px, 100%);
-  max-height: min(80vh, 720px);
-  overflow-y: auto;
-  padding: 20px;
+  max-height: min(84vh, 760px);
   border-radius: var(--shape-xl);
   background: var(--surface-container);
   box-shadow: var(--elev-3);
+  overflow: hidden;
+}
+
+.modal-body {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 20px;
 }
 
 .modal-head {
@@ -3290,7 +3592,8 @@ textarea.input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  padding: 18px 20px 12px;
+  margin-bottom: 0;
 }
 
 .modal-head h3 {
@@ -3574,6 +3877,13 @@ body.modal-open .tabbar {
     --topbar-h: 56px;
     --player-h: 70px;
     --tabbar-h: 60px;
+  }
+
+  /* Телефон не должен ездить вбок: длинные подписи и обложки живут внутри
+     своих прокручиваемых контейнеров, а не растягивают страницу. */
+  html,
+  body {
+    overflow-x: clip;
   }
 
   .topbar {
@@ -4073,15 +4383,22 @@ body.modal-open .tabbar {
   /* Настройки на телефоне — нижний лист: не висит по центру и не режется
      плеером, скролл внутри. */
   .modal {
-    align-items: end;
+    align-content: end;
     padding: 0;
   }
 
-  .modal-body {
+  .modal-card {
     width: 100%;
     max-height: 92dvh;
     border-radius: var(--shape-xl) var(--shape-xl) 0 0;
-    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0));
+  }
+
+  .modal-head {
+    padding: 16px 16px 10px;
+  }
+
+  .modal-body {
+    padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0));
   }
 }
 
@@ -4281,6 +4598,31 @@ html[data-density='large'] body {
   max-width: 680px;
 }
 
+/* Обложка текущего/последнего альбома справа в hero, как в Feishin. На узких
+   экранах её нет: там важнее текст и кнопки. */
+.home-hero-cover {
+  position: absolute;
+  top: 34px;
+  right: 34px;
+  width: 176px;
+  border-radius: var(--shape-lg);
+  overflow: hidden;
+  box-shadow: 0 22px 44px -20px rgb(0 0 0 / 70%);
+  pointer-events: none;
+}
+
+@media (min-width: 1181px) {
+  .home-hero:has(.home-hero-cover) .home-hero-copy {
+    padding-right: 210px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .home-hero-cover {
+    display: none;
+  }
+}
+
 .home-hero-copy h1 {
   font-size: clamp(30px, 3.4vw, 44px);
   letter-spacing: -0.035em;
@@ -4306,6 +4648,60 @@ html[data-density='large'] body {
 .home-chips .chip {
   flex: 0 0 auto;
   scroll-snap-align: start;
+}
+
+/* Жанровые «пилюли» с цветной полосой слева, как в Feishin. Цвет берётся из
+   позиции, поэтому один и тот же жанр всегда выглядит одинаково. */
+.home-chips .chip {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-left: 18px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+}
+
+.home-chips .chip::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--chip-accent, var(--primary));
+}
+
+.home-chips .chip:nth-child(6n + 1) {
+  --chip-accent: #8b5cf6;
+}
+
+.home-chips .chip:nth-child(6n + 2) {
+  --chip-accent: #9bb7a8;
+}
+
+.home-chips .chip:nth-child(6n + 3) {
+  --chip-accent: #f2a65a;
+}
+
+.home-chips .chip:nth-child(6n + 4) {
+  --chip-accent: #5aa9e6;
+}
+
+.home-chips .chip:nth-child(6n + 5) {
+  --chip-accent: #e05c8a;
+}
+
+.home-chips .chip:nth-child(6n + 6) {
+  --chip-accent: #e9c27e;
+}
+
+.home-chips .chip.active {
+  background: var(--surface-container-highest);
+  border-color: var(--chip-accent, var(--primary));
+  color: var(--on-surface);
 }
 
 .shelf-row {
@@ -4534,10 +4930,17 @@ html[data-density='large'] body {
   }
 }
 
-/* Desktop: full sidebar with labels, like SimpMusic's desktop shell. */
+/* Desktop: full sidebar with labels, like SimpMusic's desktop shell.
+   The density presets (html[data-density]) also set --rail-w and would win on
+   specificity, leaving a 76–104px rail with clipped labels next to a centered
+   content column. On desktop the shell always uses the label rail. */
 @media (min-width: 1200px) {
-  :root {
-    --rail-w: 220px;
+  /* `:root` (0,1,0) beats plain `html` (0,0,1): the rail must be declared on
+     the pseudo-class, otherwise the 88px default from the token block wins. */
+  :root,
+  html[data-density='compact'],
+  html[data-density='large'] {
+    --rail-w: 240px;
   }
 
   .brand {
@@ -4811,4 +5214,49 @@ html[data-density='large'] body {
   .np-controls {
     margin: 10px 0 2px;
   }
+}
+
+/* Karaoke: enhanced LRC highlights each word, not the whole line. */
+.lyric-line.has-words {
+  color: var(--on-surface-faint);
+}
+
+/* Words own their colour, so the active line can stay bright without painting
+   words that have not been sung yet. */
+.lyric-line.has-words .lyric-word {
+  transition: color 120ms linear, opacity 120ms linear;
+  color: var(--on-surface-faint);
+}
+
+.lyric-line.has-words .lyric-word.past {
+  color: var(--on-surface);
+}
+
+.lyric-line.has-words .lyric-word.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.lyric-line.has-words.active {
+  transform: none;
+  font-weight: 400;
+  color: var(--on-surface);
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border-radius: var(--shape-md);
+  background: var(--surface-container);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.settings-toggle input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
 }

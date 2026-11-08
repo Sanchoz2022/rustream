@@ -1,7 +1,7 @@
 //! The signed-in user's own profile: settings, ratings, password, history.
 
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Extension, Json,
@@ -22,16 +22,18 @@ pub async fn payload(state: &Arc<RwLock<AppState>>, user: &AuthUser) -> Json<Val
         .await
         .ok()
         .flatten();
-    let (lastfm_username, lastfm_connected, listenbrainz_connected, api_key, theme) = match row {
-        Some(row) => (
-            row.lastfm_username.clone(),
-            row.lastfm_session_key.is_some(),
-            row.listenbrainz_token.is_some(),
-            row.api_key.clone(),
-            row.theme.clone(),
-        ),
-        None => (None, false, false, None, None),
-    };
+    let (lastfm_username, lastfm_connected, listenbrainz_connected, api_key, theme, data_saver) =
+        match row {
+            Some(row) => (
+                row.lastfm_username.clone(),
+                row.lastfm_session_key.is_some(),
+                row.listenbrainz_token.is_some(),
+                row.api_key.clone(),
+                row.theme.clone(),
+                row.data_saver != 0,
+            ),
+            None => (None, false, false, None, None, false),
+        };
 
     Json(json!({
         "user": {
@@ -45,7 +47,8 @@ pub async fn payload(state: &Arc<RwLock<AppState>>, user: &AuthUser) -> Json<Val
             "lastfmConnected": lastfm_connected,
             "listenbrainzConnected": listenbrainz_connected,
             "subsonicApiKey": api_key,
-            "theme": theme.unwrap_or_else(|| "violet".to_string())
+            "theme": theme.unwrap_or_else(|| "violet".to_string()),
+            "dataSaver": data_saver
         }
     }))
 }
@@ -63,6 +66,8 @@ pub struct UpdateMeRequest {
     display_name: Option<String>,
     #[serde(default)]
     theme: Option<String>,
+    #[serde(default, alias = "dataSaver")]
+    data_saver: Option<bool>,
 }
 
 pub async fn api_update_me(
@@ -78,6 +83,11 @@ pub async fn api_update_me(
     }
     if let Some(theme) = request.theme {
         if let Err(error) = auth::set_theme(&db, &user.user_id, &theme).await {
+            return fail(StatusCode::BAD_REQUEST, error.to_string());
+        }
+    }
+    if let Some(enabled) = request.data_saver {
+        if let Err(error) = auth::set_data_saver(&db, &user.user_id, enabled).await {
             return fail(StatusCode::BAD_REQUEST, error.to_string());
         }
     }
@@ -230,6 +240,41 @@ pub async fn api_update_scrobbling(
     )
     .await
     {
+        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
+        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    }
+}
+
+/// Forget one external scrobbler: `?service=listenbrainz` or `?service=lastfm`.
+/// Empty values in the PUT endpoint mean "keep", so removal needs its own verb.
+pub async fn api_disconnect_scrobbling(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Extension(user): Extension<AuthUser>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let db = super::db(&state).await;
+    let service = params
+        .get("service")
+        .map(String::as_str)
+        .unwrap_or_default();
+    let result = match service {
+        "listenbrainz" => {
+            sqlx::query("UPDATE users SET listenbrainz_token = NULL WHERE user_id = ?")
+                .bind(&user.user_id)
+                .execute(&db)
+                .await
+                .map(|_| ())
+        }
+        "lastfm" => sqlx::query(
+            "UPDATE users SET lastfm_session_key = NULL, lastfm_username = NULL WHERE user_id = ?",
+        )
+        .bind(&user.user_id)
+        .execute(&db)
+        .await
+        .map(|_| ()),
+        _ => return fail(StatusCode::BAD_REQUEST, "Неизвестный сервис"),
+    };
+    match result {
         Ok(()) => Json(json!({ "status": "ok" })).into_response(),
         Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }

@@ -50,6 +50,7 @@ pub struct UserRow {
     pub lastfm_token: Option<String>,
     pub listenbrainz_token: Option<String>,
     pub theme: Option<String>,
+    pub data_saver: i64,
 }
 
 impl UserRow {
@@ -269,7 +270,8 @@ async fn insert_user(
 pub async fn get_user_by_username(pool: &SqlitePool, username: &str) -> Result<Option<UserRow>> {
     Ok(sqlx::query_as::<_, UserRow>(
         "SELECT user_id, username, password_hash, password_enc, display_name, is_admin,
-                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme
+                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme,
+                data_saver
          FROM users WHERE username = ? COLLATE NOCASE",
     )
     .bind(username.trim())
@@ -280,7 +282,8 @@ pub async fn get_user_by_username(pool: &SqlitePool, username: &str) -> Result<O
 pub async fn get_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<UserRow>> {
     Ok(sqlx::query_as::<_, UserRow>(
         "SELECT user_id, username, password_hash, password_enc, display_name, is_admin,
-                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme
+                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme,
+                data_saver
          FROM users WHERE user_id = ?",
     )
     .bind(user_id)
@@ -356,6 +359,27 @@ pub fn is_valid_theme(theme: &str) -> bool {
     theme
         .strip_prefix('#')
         .is_some_and(|hex| hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// Traffic saver: YouTube audio is requested at the lowest usable bitrate.
+pub async fn set_data_saver(pool: &SqlitePool, user_id: &str, enabled: bool) -> Result<()> {
+    sqlx::query("UPDATE users SET data_saver = ? WHERE user_id = ?")
+        .bind(i64::from(enabled))
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn data_saver(pool: &SqlitePool, user_id: &str) -> bool {
+    sqlx::query_scalar::<_, i64>("SELECT data_saver FROM users WHERE user_id = ?")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(0)
+        != 0
 }
 
 pub async fn set_theme(pool: &SqlitePool, user_id: &str, theme: &str) -> Result<()> {

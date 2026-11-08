@@ -196,6 +196,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_ytm_tracks_cached ON ytm_tracks(last_used_at) WHERE file_path IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id);
         CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
+        -- Local-FLAC lookup for YouTube tracks matches on duration.
+        CREATE INDEX IF NOT EXISTS idx_tracks_duration ON tracks(duration_ms);
         CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist_id);
         CREATE INDEX IF NOT EXISTS idx_ytm_user ON ytm_cache(user_id);
         CREATE INDEX IF NOT EXISTS idx_ytm_expires ON ytm_cache(expires_at);
@@ -236,6 +238,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         ("users", "listenbrainz_token", "TEXT"),
         ("playlists", "user_id", "TEXT"),
         ("users", "theme", "TEXT"),
+        ("users", "data_saver", "INTEGER NOT NULL DEFAULT 0"),
         ("users", "ytm_cookies_enc", "TEXT"),
         ("users", "ytm_account", "TEXT"),
         ("users", "ytm_updated_at", "INTEGER"),
@@ -245,6 +248,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         ("ytm_tracks", "resolved_ext", "TEXT"),
         ("ytm_tracks", "resolved_size", "INTEGER"),
         ("ytm_tracks", "resolved_at", "INTEGER"),
+        ("ytm_tracks", "resolved_saver", "INTEGER"),
     ] {
         if !column_exists(pool, table, column).await? {
             let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition);

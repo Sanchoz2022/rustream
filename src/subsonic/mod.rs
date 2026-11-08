@@ -76,6 +76,7 @@ pub fn routes(state: Arc<RwLock<AppState>>) -> Router<Arc<RwLock<AppState>>> {
     route!("/search3", search3);
     route!("/getGenres", get_genres);
     route!("/getLyrics", get_lyrics);
+    route!("/getLyricsBySongId", get_lyrics_by_song_id);
     route!("/getCoverArt", get_cover_art);
     route!("/stream", stream);
     route!("/download", stream);
@@ -511,7 +512,12 @@ async fn get_music_folders(Query(_params): Query<HashMap<String, String>>) -> Js
 }
 
 async fn open_subsonic_extensions(Query(_params): Query<HashMap<String, String>>) -> Json<Value> {
-    ok(json!({ "openSubsonicExtensions": [] }))
+    ok(json!({
+        "openSubsonicExtensions": [
+            // Line-synced lyrics with timings, served by getLyricsBySongId.
+            { "name": "songLyrics", "versions": [1] }
+        ]
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -1637,21 +1643,130 @@ async fn get_lyrics(
     };
 
     let online = state.read().await.config.online_lyrics;
+    let store = crate::lyrics::store_dir(&state.read().await.config.db_path);
     match crate::lyrics::resolve(
         &db,
-        &track_id,
-        std::path::Path::new(&file_path),
-        &track_artist,
-        &track_title,
-        duration_ms / 1000,
-        online,
+        &crate::lyrics::Lookup {
+            track_id: &track_id,
+            path: std::path::Path::new(&file_path),
+            artist: &track_artist,
+            title: &track_title,
+            duration_sec: duration_ms / 1000,
+            online,
+            refresh: false,
+            store: Some(&store),
+            sidecar: true,
+            proxy: state.read().await.config.lyrics_proxy.as_deref(),
+        },
     )
     .await
     {
-        Some(lyrics) => ok(json!({
+        crate::lyrics::Outcome::Found(lyrics) => ok(json!({
             "lyrics": { "artist": track_artist, "title": track_title, "value": lyrics.plain }
         })),
-        None => fail(70, "Lyrics not found"),
+        crate::lyrics::Outcome::NotFound => fail(70, "Lyrics not found"),
+        crate::lyrics::Outcome::Unavailable => fail(70, "Lyrics service unavailable"),
+    }
+}
+
+/// OpenSubsonic `getLyricsBySongId`: the same text as `getLyrics`, but with
+/// line timings, so modern clients (Feishin and friends) can highlight the
+/// line that is playing.
+async fn get_lyrics_by_song_id(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<Value> {
+    let Some(id) = params
+        .get("id")
+        .or_else(|| params.get("songId"))
+        .map(|value| value.trim().to_string())
+    else {
+        return fail(10, "Missing song id");
+    };
+
+    let db = pool(&state).await;
+    let row: Option<(String, String, String, String, i64)> = sqlx::query_as(
+        "SELECT t.track_id, t.file_path, t.title, ar.name, t.duration_ms
+         FROM tracks t JOIN artists ar ON ar.artist_id = t.artist_id
+         WHERE t.track_id = ?",
+    )
+    .bind(&id)
+    .fetch_optional(&db)
+    .await
+    .unwrap_or(None);
+
+    // A YouTube track has no row in `tracks`: its metadata comes from the
+    // remembered listing, exactly like the web API does it.
+    let row = match row {
+        Some(row) => Some(row),
+        None => crate::api::library::ytm_lyrics_row(&db, &id).await.map(
+            |(file_path, title, artist, duration_ms)| {
+                (id.clone(), file_path, title, artist, duration_ms)
+            },
+        ),
+    };
+
+    let Some((track_id, file_path, title, artist, duration_ms)) = row else {
+        return fail(70, "Lyrics not found");
+    };
+
+    let (online, store, proxy) = {
+        let state = state.read().await;
+        (
+            state.config.online_lyrics,
+            crate::lyrics::store_dir(&state.config.db_path),
+            state.config.lyrics_proxy.clone(),
+        )
+    };
+    let sidecar = crate::ytm::video_id(&track_id).is_none();
+
+    let found = crate::lyrics::resolve(
+        &db,
+        &crate::lyrics::Lookup {
+            track_id: &track_id,
+            path: std::path::Path::new(&file_path),
+            artist: &artist,
+            title: &title,
+            duration_sec: duration_ms / 1000,
+            online,
+            refresh: false,
+            store: Some(&store),
+            sidecar,
+            proxy: proxy.as_deref(),
+        },
+    )
+    .await;
+
+    match found {
+        crate::lyrics::Outcome::Found(lyrics) => {
+            let synced = !lyrics.synced.is_empty();
+            let lines: Vec<Value> = if synced {
+                lyrics
+                    .synced
+                    .iter()
+                    .map(|line| json!({ "start": line.time_ms, "value": line.text }))
+                    .collect()
+            } else {
+                lyrics
+                    .plain
+                    .lines()
+                    .map(|line| json!({ "value": line }))
+                    .collect()
+            };
+            ok(json!({
+                "lyricsList": {
+                    "structuredLyrics": [{
+                        "displayArtist": artist,
+                        "displayTitle": title,
+                        "synced": synced,
+                        "offset": 0,
+                        "line": lines
+                    }]
+                }
+            }))
+        }
+        crate::lyrics::Outcome::NotFound => fail(70, "Lyrics not found"),
+        crate::lyrics::Outcome::Unavailable => fail(70, "Lyrics service unavailable"),
     }
 }
 

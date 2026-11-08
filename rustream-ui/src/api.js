@@ -215,6 +215,12 @@ export function changePassword(currentPassword, newPassword) {
   });
 }
 
+export function disconnectScrobbling(service) {
+  return jsonFetch(`/api/me/scrobbling?service=${encodeURIComponent(service)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function saveScrobbling({ lastfmUsername, lastfmSessionKey, listenbrainzToken }) {
   return jsonFetch('/api/me/scrobbling', {
     method: 'PUT',
@@ -251,7 +257,18 @@ export async function getMixes() {
 }
 
 export async function getLyrics(trackId, refresh = false) {
-  return jsonFetch(`/api/lyrics/${encodeURIComponent(trackId)}${refresh ? '?refresh=1' : ''}`);
+  // The server asks LRCLIB/lyrics.ovh with retries; never leave the panel on a
+  // spinner forever if one of them hangs.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    return await jsonFetch(
+      `/api/lyrics/${encodeURIComponent(trackId)}${refresh ? '?refresh=1' : ''}`,
+      { signal: controller.signal },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function rescan() {

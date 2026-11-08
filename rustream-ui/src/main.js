@@ -53,6 +53,17 @@ const cache = {
   liveMixes: null,
 };
 
+const LOSSLESS_SUFFIXES = new Set(['flac', 'wav', 'alac', 'ape', 'aiff', 'aif', 'dsf', 'dff']);
+
+// "lossless" is a property of the file, not a fallback for a missing bitrate:
+// a YouTube m4a has no bitrate in the listing and must never claim to be lossless.
+function qualityLabel(track) {
+  const suffix = (track.suffix || '').toLowerCase();
+  if (LOSSLESS_SUFFIXES.has(suffix)) return 'lossless';
+  if (track.bitRate) return `${track.bitRate} kbps`;
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Shell
 // ---------------------------------------------------------------------------
@@ -94,13 +105,24 @@ root.innerHTML = `
 
   <div class="shell">
     <nav class="nav" aria-label="Разделы">
-      <a href="#/home" data-nav="home" class="nav-item"><span class="nav-icon">${icon('home')}</span><span class="nav-label">Главная</span></a>
-      <a href="#/live" data-nav="live" class="nav-item"><span class="nav-icon">${icon('radio')}</span><span class="nav-label">Live</span></a>
-      <a href="#/ytm" data-nav="ytm" class="nav-item"><span class="nav-icon">${icon('ytm')}</span><span class="nav-label">YouTube</span></a>
-      <a href="#/library" data-nav="library" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Медиатека</span></a>
-      <a href="#/stats" data-nav="stats" class="nav-item"><span class="nav-icon">${icon('chart')}</span><span class="nav-label">Статистика</span></a>
-      <a href="#/search" data-nav="search" class="nav-item"><span class="nav-icon">${icon('search')}</span><span class="nav-label">Поиск</span></a>
+      <div class="nav-group">
+        <div class="nav-group-title">Моя библиотека</div>
+        <a href="#/home" data-nav="home" class="nav-item"><span class="nav-icon">${icon('home')}</span><span class="nav-label">Главная</span></a>
+        <a href="#/favorites" data-nav="favorites" class="nav-item"><span class="nav-icon">${icon('heartOutline')}</span><span class="nav-label">Избранное</span></a>
+        <a href="#/albums" data-nav="albums" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Альбомы</span></a>
+        <a href="#/tracks" data-nav="tracks" class="nav-item"><span class="nav-icon">${icon('music')}</span><span class="nav-label">Треки</span></a>
+        <a href="#/artists" data-nav="artists" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Артисты</span></a>
+        <a href="#/library/playlists" data-nav="playlists" class="nav-item"><span class="nav-icon">${icon('queue')}</span><span class="nav-label">Плейлисты</span></a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-title">Онлайн</div>
+        <a href="#/ytm" data-nav="ytm" class="nav-item"><span class="nav-icon">${icon('ytm')}</span><span class="nav-label">YouTube Music</span></a>
+        <a href="#/live" data-nav="live" class="nav-item"><span class="nav-icon">${icon('radio')}</span><span class="nav-label">Live</span></a>
+      </div>
+
       <div class="nav-spacer"></div>
+      <a href="#/stats" data-nav="stats" class="nav-item"><span class="nav-icon">${icon('chart')}</span><span class="nav-label">Статистика</span></a>
       <a href="#/profile" data-nav="profile" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Профиль</span></a>
       <button class="nav-item nav-settings" data-action="shortcuts" title="Горячие клавиши (?)"><span class="nav-icon">${icon('keyboard')}</span><span class="nav-label">Клавиши</span></button>
     </nav>
@@ -152,17 +174,17 @@ root.innerHTML = `
       <button class="icon-btn" id="queue-btn" data-action="open-queue" title="Очередь">${icon('queue')}</button>
       <div class="volume">
         <button class="icon-btn" id="volume-btn" data-action="mute" title="Звук">${icon('volumeUp')}</button>
-        <input type="range" id="volume" min="0" max="100" value="${player.volumePercent}" aria-label="Громкость" />
+        <input type="range" id="volume" min="0" max="100" value="${player.volumePercent}" style="--volume-fill: ${player.volumePercent}%" aria-label="Громкость" />
       </div>
     </div>
   </footer>
 
   <nav class="tabbar" aria-label="Основное меню">
     <a href="#/home" data-tab="home" class="tab-item"><span class="tab-icon">${icon('home')}</span><span class="tab-label">Главная</span></a>
-    <a href="#/live" data-tab="live" class="tab-item"><span class="tab-icon">${icon('radio')}</span><span class="tab-label">Live</span></a>
-    <a href="#/library" data-tab="library" class="tab-item"><span class="tab-icon">${icon('album')}</span><span class="tab-label">Медиатека</span></a>
-    <a href="#/stats" data-tab="stats" class="tab-item"><span class="tab-icon">${icon('chart')}</span><span class="tab-label">Статистика</span></a>
     <a href="#/search" data-tab="search" class="tab-item"><span class="tab-icon">${icon('search')}</span><span class="tab-label">Поиск</span></a>
+    <a href="#/library/albums" data-tab="albums" class="tab-item"><span class="tab-icon">${icon('album')}</span><span class="tab-label">Медиатека</span></a>
+    <a href="#/ytm" data-tab="ytm" class="tab-item"><span class="tab-icon">${icon('ytm')}</span><span class="tab-label">YouTube</span></a>
+    <a href="#/profile" data-tab="profile" class="tab-item"><span class="tab-icon">${icon('person')}</span><span class="tab-label">Профиль</span></a>
   </nav>
 
   <div class="np" id="np" hidden>
@@ -203,7 +225,7 @@ root.innerHTML = `
         </div>
         <div class="np-volume">
           <span class="icon" id="np-volume-icon">${icon('volumeUp')}</span>
-          <input id="np-volume" type="range" min="0" max="100" value="${player.volumePercent}" aria-label="Громкость" />
+          <input id="np-volume" type="range" min="0" max="100" value="${player.volumePercent}" style="--volume-fill: ${player.volumePercent}%" aria-label="Громкость" />
         </div>
       </div>
     </div>
@@ -361,11 +383,15 @@ function showError(message) {
     </div>`;
 }
 
-function pageHeader(title, subtitle, { actions = '', eyebrow = '' } = {}) {
+function pageHeader(title, subtitle, { actions = '', eyebrow = '', play = '', count = null } = {}) {
   return `<header class="page-head">
-    <div>
+    ${play ? `<button class="page-play" ${play} title="Слушать">${icon('play')}</button>` : ''}
+    <div class="page-head-copy">
       ${eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : ''}
-      <h1>${esc(title)}</h1>
+      <div class="page-head-title">
+        <h1>${esc(title)}</h1>
+        ${count === null ? '' : `<span class="page-count">${count}</span>`}
+      </div>
       ${subtitle ? `<p class="muted">${subtitle}</p>` : ''}
     </div>
     ${actions ? `<div class="page-actions">${actions}</div>` : ''}
@@ -459,15 +485,16 @@ function parseRoute() {
 
 // Detail pages highlight the primary section they belong to.
 const SECTION_GROUP = {
-  artist: 'library',
-  album: 'library',
-  playlist: 'library',
-  artists: 'library',
-  albums: 'library',
-  tracks: 'library',
-  playlists: 'library',
-  favorites: 'library',
-  library: 'library',
+  // Detail pages highlight the list they belong to.
+  artist: 'artists',
+  album: 'albums',
+  playlist: 'playlists',
+  artists: 'artists',
+  albums: 'albums',
+  tracks: 'tracks',
+  playlists: 'playlists',
+  favorites: 'favorites',
+  library: 'albums',
   ytm: 'ytm',
   profile: 'profile',
   live: 'live',
@@ -702,6 +729,7 @@ async function renderHome(seq) {
             <a class="btn ghost" href="#/live">${icon('radio')} Live</a>
           </div>
         </div>
+        ${heroCover ? `<span class="home-hero-cover">${coverHtml(heroCover, { size: 400, alt: 'Обложка' })}</span>` : ''}
         <nav class="home-chips" aria-label="Быстрые разделы">
           <a class="chip active" href="#/home" aria-current="page">Все</a>
           <a class="chip" href="#/library/recent">Новинки</a>
@@ -994,9 +1022,10 @@ async function renderArtists(seq) {
   state.currentTracks = [];
   $('#view').innerHTML = `
     <div class="page">
-      ${pageHeader('Артисты', `${artists.length} ${plural(artists.length, 'артист', 'артиста', 'артистов')} в библиотеке`, {
+      ${pageHeader('Артисты', 'Исполнители в вашей библиотеке', {
         actions: `<button class="btn glass" data-action="shuffle-library">${icon('shuffle')} Перемешать всё</button>`,
         eyebrow: 'Коллекция',
+        count: artists.length,
       })}
       <div class="grid cards">${artists.map(artistCard).join('')}</div>
     </div>`;
@@ -1039,8 +1068,10 @@ async function renderAlbums(seq) {
   state.currentTracks = [];
   $('#view').innerHTML = `
     <div class="page">
-      ${pageHeader('Альбомы', `${albums.length} ${plural(albums.length, 'альбом', 'альбома', 'альбомов')}`, {
+      ${pageHeader('Альбомы', 'Все альбомы вашей библиотеки', {
         eyebrow: 'Коллекция',
+        count: albums.length,
+        play: albums.length ? 'data-action="play-library"' : '',
       })}
       <div class="grid cards">${albums.map(albumCard).join('')}</div>
     </div>`;
@@ -1086,10 +1117,11 @@ async function renderTracks(seq) {
   state.currentTracks = tracks;
   $('#view').innerHTML = `
     <div class="page">
-      ${pageHeader('Все треки', `${tracks.length} ${plural(tracks.length, 'трек', 'трека', 'треков')}`, {
+      ${pageHeader('Треки', 'Полный список треков библиотеки', {
         eyebrow: 'Библиотека',
-        actions: `<button class="btn primary" data-action="play-all">${icon('play')} Слушать</button>
-                  <button class="btn glass" data-action="shuffle-all">${icon('shuffle')} Перемешать</button>`,
+        count: tracks.length,
+        play: 'data-action="play-all"',
+        actions: `<button class="btn glass" data-action="shuffle-all">${icon('shuffle')} Перемешать</button>`,
       })}
       ${trackList(tracks, { showCover: true })}
     </div>`;
@@ -1104,8 +1136,9 @@ async function renderPlaylists(seq) {
 
   $('#view').innerHTML = `
     <div class="page">
-      ${pageHeader('Плейлисты', `${playlists.length} ${plural(playlists.length, 'плейлист', 'плейлиста', 'плейлистов')}`, {
+      ${pageHeader('Плейлисты', 'Собранные вами подборки', {
         eyebrow: 'Моя музыка',
+        count: playlists.length,
         actions: `<button class="btn primary" data-action="new-playlist">${icon('add')} Новый плейлист</button>`,
       })}
       ${
@@ -1165,11 +1198,11 @@ async function renderFavorites(seq) {
 
   $('#view').innerHTML = `
     <div class="page">
-      ${pageHeader('Избранное', `${songs.length} ${plural(songs.length, 'трек', 'трека', 'треков')}`, {
+      ${pageHeader('Избранное', 'Треки, которые вы отметили', {
         eyebrow: 'Моя музыка',
-        actions: songs.length
-          ? `<button class="btn primary" data-action="play-all">${icon('play')} Слушать</button>`
-          : '',
+        count: songs.length,
+        play: songs.length ? 'data-action="play-all"' : '',
+        actions: '',
       })}
       ${
         songs.length
@@ -1453,19 +1486,29 @@ async function createPlaylistFlow() {
   });
 }
 
-function showModal({ title, body, onMount }) {
+function showModal({ title, body, onMount, wide = false }) {
   const rootEl = $('#modal-root');
   rootEl.innerHTML = `
     <div class="modal-backdrop" data-modal-action="close">
-      <div class="modal" role="dialog" aria-modal="true">
-        <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-modal-action="close">${icon('close')}</button></div>
-        <div class="modal-body">${body}</div>
+      <div class="modal ${wide ? 'modal-wide' : ''}" role="dialog" aria-modal="true">
+        <div class="modal-card">
+          <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-modal-action="close">${icon('close')}</button></div>
+          <div class="modal-body">${body}</div>
+        </div>
       </div>
     </div>`;
   document.body.classList.add('modal-open');
   const modal = $('.modal', rootEl);
   rootEl.querySelector('.modal-backdrop').addEventListener('click', (event) => {
-    if (event.target.dataset.modalAction === 'close') closeModal();
+    // The close icon is an <svg> inside the button, so match the closest
+    // element; a click on the dimmed area (outside the card) also closes.
+    // The backdrop itself carries the close attribute, so it must be excluded
+    // from the closest() lookup: every click inside the card bubbles through it.
+    const closeEl = event.target.closest('[data-modal-action="close"]');
+    if (closeEl && closeEl !== event.currentTarget) return closeModal();
+    // `.modal` covers the whole screen, so a click on the dimmed area targets
+    // it directly; anything inside the card has a deeper target.
+    if (event.target.classList.contains('modal')) closeModal();
   });
   onMount?.(modal);
 }
@@ -1567,8 +1610,8 @@ function renderNowPlaying() {
       <p class="muted">${esc(track?.album || '')}${track?.year ? ` · ${track.year}` : ''}</p>
       <div class="np-chips" id="np-chips">
         ${track ? `
-          <span class="chip">${(track.suffix || 'flac').toUpperCase()}</span>
-          <span class="chip">${track.bitRate ? `${track.bitRate} kbps` : 'lossless'}</span>
+          <span class="chip">${(track.suffix || '—').toUpperCase()}</span>
+          ${qualityLabel(track) ? `<span class="chip">${qualityLabel(track)}</span>` : ''}
           <span class="chip" id="np-buffer">буфер 0:00</span>
         ` : ''}
       </div>
@@ -1609,6 +1652,8 @@ async function renderLyricsPanel(panel, track) {
       state.lyricsTrackId = track.id;
       state.lyricsRefresh = false;
       state.lyricsActiveKey = null;
+      state.lyricsActiveLine = undefined;
+      state.lyricsActiveWord = undefined;
     } catch {
       state.lyrics = null;
     }
@@ -1618,10 +1663,17 @@ async function renderLyricsPanel(panel, track) {
 
   const lyrics = state.lyrics;
   if (!lyrics || (!lyrics.plain && !lyrics.synced?.length)) {
+    // The service may have been rate limited or simply down: that is not the
+    // same as "there is no text for this track".
+    const unavailable = lyrics?.error === 'unavailable';
     panel.innerHTML = `<div class="panel-empty">
       <span class="empty-icon">${icon('lyrics')}</span>
-      <h3>Текст не найден</h3>
-      <p>Локального .lrc/.txt нет, интернет-поиск ничего не вернул. Можно попробовать ещё раз.</p>
+      <h3>${unavailable ? 'Сервис текстов недоступен' : 'Текст не найден'}</h3>
+      <p>${
+        unavailable
+          ? 'LRCLIB не ответил (лимит запросов или сбой). Текст может быть — попробуйте ещё раз.'
+          : 'Локального .lrc/.txt нет, интернет-поиск ничего не вернул. Можно попробовать ещё раз.'
+      }</p>
       <button class="btn glass" data-action="refresh-lyrics">${icon('refresh')} Искать в интернете</button>
     </div>`;
     return;
@@ -1632,24 +1684,38 @@ async function renderLyricsPanel(panel, track) {
       ? 'LRCLIB'
       : lyrics.source === 'local'
         ? 'локальный файл'
-        : lyrics.source === 'lyrics.ovh'
-          ? 'lyrics.ovh'
-          : 'кэш';
+        : lyrics.source === 'saved'
+          ? 'сохранённый текст'
+          : lyrics.source === 'lyrics.ovh'
+            ? 'lyrics.ovh'
+            : 'кэш';
+  // Текст, найденный в интернете, сервер кладёт рядом с аудиофайлом.
+  const savedNote = lyrics.saved
+    ? '<span class="lyrics-saved">сохранено рядом с файлом</span>'
+    : '';
 
   panel.innerHTML = `
     <div class="panel-title">
       <h3>Текст песни</h3>
       <span class="lyrics-source">${icon('wave')} ${esc(source)}</span>
+      ${savedNote}
       <button class="icon-btn" data-action="refresh-lyrics" title="Найти заново">${icon('refresh')}</button>
     </div>
     <div class="lyrics" id="lyrics-body">
       ${
         lyrics.synced?.length
           ? lyrics.synced
-              .map(
-                (line, index) =>
-                  `<div class="lyric-line" data-index="${index}" data-time="${line.time_ms}">${esc(line.text)}</div>`,
-              )
+              .map((line, index) => {
+                const content = line.words?.length
+                  ? line.words
+                      .map(
+                        (word) =>
+                          `<span class="lyric-word" data-start="${word.start_ms}" data-end="${word.end_ms}">${esc(word.text)}</span>`,
+                      )
+                      .join(' ')
+                  : esc(line.text);
+                return `<div class="lyric-line${line.words?.length ? ' has-words' : ''}" data-index="${index}" data-time="${line.time_ms}">${content}</div>`;
+              })
               .join('')
           : `<div class="lyrics-plain">${esc(lyrics.plain).replace(/\n/g, '<br />')}</div>`
       }
@@ -1662,18 +1728,59 @@ function highlightLyrics() {
   const lines = $$('.lyric-line');
   if (!lines.length) return;
   const ms = player.currentTime * 1000;
+
+  // Binary search over line timestamps: lyrics can be a few hundred lines and
+  // this runs on every timeupdate.
+  let low = 0;
+  let high = lines.length - 1;
   let active = -1;
-  lines.forEach((line, index) => {
-    if (Number(line.dataset.time) <= ms) active = index;
-  });
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (Number(lines[mid].dataset.time) <= ms) {
+      active = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
   // Before the first timestamp, highlight the first line so the panel does
   // not look washed out while the intro plays.
   if (active < 0) active = 0;
-  lines.forEach((line, index) => line.classList.toggle('active', index === active));
+  if (state.lyricsActiveLine !== active) {
+    lines.forEach((line, index) => line.classList.toggle('active', index === active));
+    // Word highlights belong to the line that is active now; leftovers from the
+    // previous line would otherwise stay lit.
+    $$('.lyric-word.active, .lyric-word.past').forEach((word) =>
+      word.classList.remove('active', 'past'),
+    );
+    state.lyricsActiveLine = active;
+    state.lyricsActiveWord = undefined;
+  }
+
+  // Word-level karaoke: only enhanced LRC has word timings.
+  const line = lines[active];
+  const words = line?.classList.contains('has-words') ? $$('.lyric-word', line) : [];
+  let activeWord = -1;
+  if (words.length) {
+    for (let index = 0; index < words.length; index += 1) {
+      if (Number(words[index].dataset.start) <= ms) activeWord = index;
+      else break;
+    }
+    if (state.lyricsActiveWord === undefined || state.lyricsActiveWord !== activeWord) {
+      state.lyricsActiveWord = activeWord;
+      words.forEach((word, index) => {
+        word.classList.toggle('active', index === activeWord);
+        word.classList.toggle('past', index < activeWord);
+      });
+    }
+  } else if (state.lyricsActiveWord !== undefined) {
+    state.lyricsActiveWord = undefined;
+  }
+
   const key = `${state.lyricsTrackId || ''}:${active}`;
   if (active >= 0 && state.lyricsActiveKey !== key) {
     state.lyricsActiveKey = key;
-    lines[active].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    line.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 }
 
@@ -1690,11 +1797,12 @@ function renderInfoPanel(panel, track) {
     ['Исполнитель', track.artist || '—'],
     ['Альбом', track.album || '—'],
     ['Год', track.year || '—'],
-    ['Формат', (track.suffix || 'flac').toUpperCase()],
-    ['Битрейт', track.bitRate ? `${track.bitRate} kbps` : 'lossless'],
+    ['Формат', (track.suffix || '—').toUpperCase()],
+    ['Битрейт', qualityLabel(track) || '—'],
     ['Размер', track.size ? formatBytes(track.size) : '—'],
     ['Длительность', formatTime(track.duration)],
     ['Источник', track.source === 'ytm' ? 'YouTube Music' : 'Локальная библиотека'],
+    ['Трафик', (state.meSettings || {}).dataSaver ? 'экономия' : 'максимум'],
   ];
   panel.innerHTML = `
     <div class="panel-title"><h3>О треке</h3><span class="muted">${esc(track.title || '')}</span></div>
@@ -1820,7 +1928,7 @@ function updateTrackUi() {
     cover.removeAttribute('src');
     $('.pb-cover').classList.remove('loaded');
   }
-  qualityFormat.textContent = (track.suffix || 'flac').toUpperCase();
+  qualityFormat.textContent = (track.suffix || '—').toUpperCase();
   qualityDetail.textContent = [
     track.bitRate ? `${track.bitRate} kbps` : null,
     track.size ? formatBytes(track.size) : null,
@@ -1946,16 +2054,18 @@ function updateModeUi() {
 }
 
 function updateVolumeUi() {
-  $('#volume').value = String(player.volumePercent);
+  const value = `${player.volumePercent}%`;
+  for (const input of [$('#volume'), $('#np-volume')]) {
+    if (!input) continue;
+    input.value = String(player.volumePercent);
+    // The track is painted as a gradient: filled part depends on the value.
+    input.style.setProperty('--volume-fill', value);
+  }
   const name =
     player.volumePercent === 0 ? 'volumeOff' : player.volumePercent < 50 ? 'volumeDown' : 'volumeUp';
   $('#volume-btn').innerHTML = icon(name);
-  const npVolume = $('#np-volume');
-  if (npVolume) {
-    npVolume.value = String(player.volumePercent);
-    const npIcon = $('#np-volume-icon');
-    if (npIcon) npIcon.innerHTML = icon(name);
-  }
+  const npIcon = $('#np-volume-icon');
+  if (npIcon) npIcon.innerHTML = icon(name);
 }
 
 // ---------------------------------------------------------------------------
@@ -2364,144 +2474,246 @@ function settingsBody(users) {
   const settings = state.meSettings || {};
   const lastfmReady = state.authConfig?.lastfm;
   const lastfmConfig = state.lastfmConfig || {};
+  const colorMode = localStorage.getItem('colorMode') || 'dark';
+  const density = state.density || 'default';
+  const tabs = [
+    ['profile', 'person', 'Профиль'],
+    ['appearance', 'palette', 'Оформление'],
+    ['playback', 'wave', 'Воспроизведение'],
+    ['scrobbling', 'radio', 'Скробблинг'],
+    ['security', 'shield', 'Безопасность'],
+    ['library', 'library', 'Библиотека'],
+    ...(state.me?.isAdmin ? [['users', 'person', 'Пользователи']] : []),
+    ['about', 'sparkle', 'О сервисе'],
+  ];
+  const active = tabs.some(([id]) => id === state.settingsTab) ? state.settingsTab : 'profile';
+  const panel = (id, body) =>
+    `<section class="settings-panel" data-settings-panel="${id}" ${id === active ? '' : 'hidden'}>${body}</section>`;
+
   return `
-    <div class="settings-sections">
-      <section class="settings-section">
-        <h4>${icon('person')} Профиль</h4>
-        <form id="settings-profile-form" class="settings-form">
-          <label class="field"><span>Отображаемое имя</span>
-            <input class="input" id="settings-display-name" value="${esc(state.me?.displayName || '')}" />
-          </label>
-          <button class="btn tonal" type="submit">Сохранить имя</button>
-        </form>
-        <div class="settings-meta">
-          <span>Логин: <strong>${esc(state.me?.username || '')}</strong></span>
-          ${state.me?.isAdmin ? '<span class="chip">администратор</span>' : ''}
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <h4>${icon('palette')} Оформление</h4>
-        <p class="muted small">Цветовая тема сохраняется в аккаунте и применяется на всех устройствах.</p>
-        <div class="theme-picker">
-          ${THEMES.map(
-            (theme) => `<button class="theme-swatch ${state.theme === theme.id ? 'active' : ''}" data-theme-choice="${theme.id}" title="${theme.name}">
-              <span class="swatch-dot theme-${theme.id}"></span><span>${theme.name}</span>
+    <div class="settings-shell">
+      <nav class="settings-nav" aria-label="Разделы настроек">
+        ${tabs
+          .map(
+            ([id, iconName, label]) => `<button type="button" class="settings-nav-item ${id === active ? 'active' : ''}" data-settings-tab="${id}">
+              ${icon(iconName)}<span>${label}</span>
             </button>`,
-          ).join('')}
-        </div>
-      </section>
+          )
+          .join('')}
+      </nav>
 
-      <section class="settings-section">
-        <h4>${icon('radio')} Скробблинг</h4>
-        <p class="muted small">История и статистика пишутся локально всегда. Внешние сервисы получают прослушивания только после подключения.</p>
-        <div class="settings-sub">
-          <h5>ListenBrainz — проще всего</h5>
-          <p class="muted small">Бесплатно, без модерации и ключей приложения: нужен только личный токен.</p>
-          <ol class="steps">
-            <li>Откройте <a class="inline-link" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">listenbrainz.org/settings</a> и войдите.</li>
-            <li>Скопируйте «User token».</li>
-            <li>Вставьте его в поле ниже и сохраните.</li>
-          </ol>
-          <label class="field"><span>ListenBrainz token</span>
-            <input class="input" id="settings-listenbrainz" name="listenbrainz-token" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="токен из listenbrainz.org/settings" />
-          </label>
-          <button class="btn primary" data-settings-action="save-scrobbling" data-scope="listenbrainz">${icon('check')} Сохранить токен</button>
-        </div>
+      <div class="settings-pane">
+        ${panel(
+          'profile',
+          `<h4>${icon('person')} Профиль</h4>
+           <form id="settings-profile-form" class="settings-form">
+             <label class="field"><span>Отображаемое имя</span>
+               <input class="input" id="settings-display-name" value="${esc(state.me?.displayName || '')}" />
+             </label>
+             <button class="btn tonal" type="submit">Сохранить имя</button>
+           </form>
+           <div class="settings-meta">
+             <span>Логин: <strong>${esc(state.me?.username || '')}</strong></span>
+             ${state.me?.isAdmin ? '<span class="chip">администратор</span>' : ''}
+           </div>
+           <div class="settings-hint">Аватар берётся из подключённого аккаунта YouTube Music. Подключить или обновить его можно на странице «Профиль».</div>`,
+        )}
 
-        <div class="settings-sub">
-          <h5>Last.fm</h5>
-          <p class="muted small">Тоже бесплатно, но серверу нужны ключи приложения — их создаёт администратор один раз.</p>
-        <div class="settings-status">
-          <span class="status-dot ${settings.lastfmConnected ? 'on' : ''}"></span>
-          Last.fm: ${settings.lastfmConnected ? `подключён${settings.lastfmUsername ? ` как ${esc(settings.lastfmUsername)}` : ''}` : 'не подключён'}
-        </div>
-        <div class="settings-inline">
-          <button class="btn glass" data-settings-action="lastfm-connect" ${lastfmReady ? '' : 'disabled'}>${icon('wave')} Подключить Last.fm</button>
-          <button class="btn ghost" data-settings-action="lastfm-complete" ${settings.lastfmConnected ? 'disabled' : ''}>Завершить</button>
-        </div>
-        ${lastfmReady ? '' : '<p class="muted small">Для авторизации Last.fm нужны ключи приложения ниже (или в config.toml).</p>'}
-        ${state.me?.isAdmin ? `
-          <div class="settings-sub">
-            <h5>Ключи приложения Last.fm</h5>
-            <p class="muted small">Создайте приложение на last.fm/api/account/create. Ключи пишутся в config.toml и применяются сразу.</p>
-            <label class="field"><span>API key</span>
-              <input class="input" id="settings-lastfm-api-key" name="lastfm-api-key" autocomplete="off" autocapitalize="none" spellcheck="false" data-lpignore="true" value="${esc(lastfmConfig.apiKey || '')}" placeholder="32 символа" />
-            </label>
-            <label class="field"><span>API secret</span>
-              <input class="input" id="settings-lastfm-api-secret" name="lastfm-api-secret" type="password" autocomplete="new-password" data-lpignore="true" placeholder="${lastfmConfig.apiSecretSet ? 'секрет уже сохранён — оставьте пустым' : 'секрет приложения'}" />
-            </label>
-            <div class="settings-inline">
-              <button class="btn tonal" data-settings-action="save-lastfm-app">Сохранить ключи приложения</button>
-              <button class="btn ghost danger" data-settings-action="clear-lastfm-app">Удалить ключи</button>
-            </div>
-          </div>` : ''}
-        <label class="field"><span>Last.fm session key (вручную)</span>
-          <input class="input" id="settings-lastfm-key" name="lastfm-session-key" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="оставьте пустым, чтобы не менять" />
-        </label>
-        <button class="btn tonal" data-settings-action="save-scrobbling" data-scope="lastfm">Сохранить Last.fm</button>
-        </div>
-      </section>
+        ${panel(
+          'appearance',
+          `<h4>${icon('palette')} Оформление</h4>
+           <p class="muted small">Тема сохраняется в аккаунте и применяется на всех устройствах. Режим и плотность — на этом устройстве.</p>
+           <div class="settings-group">
+             <span class="settings-label">Режим</span>
+             <div class="theme-mode-picker">
+               <button class="mode-btn ${colorMode === 'dark' ? 'active' : ''}" data-action="color-mode" data-mode="dark">${icon('moon')} Тёмная</button>
+               <button class="mode-btn ${colorMode === 'light' ? 'active' : ''}" data-action="color-mode" data-mode="light">${icon('sun')} Светлая</button>
+               <button class="mode-btn ${colorMode === 'auto' ? 'active' : ''}" data-action="color-mode" data-mode="auto">${icon('settings')} Системная</button>
+             </div>
+           </div>
+           <div class="settings-group">
+             <span class="settings-label">Акцент</span>
+             <div class="theme-picker">
+               ${THEMES.map(
+                 (theme) => `<button class="theme-swatch ${state.theme === theme.id ? 'active' : ''}" data-action="theme" data-theme="${theme.id}" title="${theme.name}">
+                   <span class="swatch-dot theme-${theme.id}"></span><span>${theme.name}</span>
+                 </button>`,
+               ).join('')}
+               <label class="theme-swatch custom ${HEX_THEME.test(state.theme) ? 'active' : ''}" title="Свой цвет">
+                 <input type="color" id="theme-custom" value="${HEX_THEME.test(state.theme) ? state.theme : '#c7a6ff'}" aria-label="Свой цвет" />
+                 <span>Свой цвет</span>
+               </label>
+             </div>
+           </div>
+           <div class="settings-group">
+             <span class="settings-label">Плотность</span>
+             <div class="theme-mode-picker">
+               ${DENSITIES.map(
+                 (item) => `<button class="mode-btn ${density === item.id ? 'active' : ''}" data-action="density" data-value="${item.id}">${item.name}</button>`,
+               ).join('')}
+             </div>
+           </div>`,
+        )}
 
-      <section class="settings-section">
-        <h4>${icon('settings')} Безопасность</h4>
-        <form id="settings-password-form" class="settings-form">
-          <label class="field"><span>Текущий пароль</span>
-            <span class="input-wrap">
-              <input class="input" id="settings-current-password" type="password" autocomplete="current-password" />
-              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="settings-current-password" aria-label="Показать пароль">${icon('eye')}</button>
-            </span>
-          </label>
-          <label class="field"><span>Новый пароль</span>
-            <span class="input-wrap">
-              <input class="input" id="settings-new-password" type="password" autocomplete="new-password" />
-              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="settings-new-password" aria-label="Показать пароль">${icon('eye')}</button>
-            </span>
-          </label>
-          <button class="btn tonal" type="submit">Сменить пароль</button>
-        </form>
-      </section>
+        ${panel(
+          'playback',
+          `<h4>${icon('wave')} Воспроизведение</h4>
+           <p class="muted small">Экономия трафика просит у YouTube Music самый низкий битрейт (~48–64 kbps). Локальные файлы всегда играют как есть — FLAC остаётся FLAC.</p>
+           <label class="settings-toggle">
+             <input type="checkbox" id="settings-data-saver" ${settings.dataSaver ? 'checked' : ''} />
+             <span>Экономить трафик</span>
+           </label>
+           <div class="settings-hint">Формат и битрейт текущего трека видны в нижней панели и в «Инфо» плеера. Перемотка и громкость работают колесом мыши.</div>`,
+        )}
 
-      <section class="settings-section">
-        <h4>${icon('library')} Библиотека</h4>
-        <p class="muted small">Сканер перечитывает папки каждые ${state.authConfig?.scanInterval || 300} секунд. Новые файлы появятся автоматически.</p>
-        <div class="settings-inline">
-          <button class="btn glass" data-settings-action="rescan">${icon('refresh')} Пересканировать сейчас</button>
-          <button class="btn ghost danger" data-settings-action="clear-history">${icon('delete')} Очистить историю</button>
-        </div>
-      </section>
+        ${panel(
+          'scrobbling',
+          `<h4>${icon('radio')} Скробблинг</h4>
+           <p class="muted small">История и статистика пишутся локально всегда. Внешние сервисы получают прослушивания только после подключения.</p>
 
-      ${state.me?.isAdmin ? `
-      <section class="settings-section">
-        <h4>${icon('person')} Пользователи</h4>
-        <p class="muted small">Новый человек может войти двумя способами: вы создаёте ему логин и пароль здесь, либо выдаёте код приглашения — блок «Приглашения» на странице профиля.</p>
-        <div class="user-list" id="settings-user-list">
-          ${(users || []).map((user) => `
-            <div class="user-row">
-              <span class="user-avatar small">${esc(initials(user.displayName || user.username))}</span>
-              <span class="user-row-main"><strong>${esc(user.displayName || user.username)}</strong><small>@${esc(user.username)}${user.isAdmin ? ' · админ' : ''}</small></span>
-              ${user.id === state.me?.id ? '<span class="chip">вы</span>' : `<button class="icon-btn" data-settings-action="delete-user" data-id="${user.id}" title="Удалить">${icon('delete')}</button>`}
-            </div>`).join('')}
-        </div>
-        <div class="settings-form user-create">
-          <label class="field"><span>Логин</span><input class="input" id="new-user-name" autocapitalize="none" /></label>
-          <label class="field"><span>Пароль</span>
-            <span class="input-wrap">
-              <input class="input" id="new-user-password" type="password" autocomplete="new-password" />
-              <button class="reveal-btn" type="button" data-action="toggle-password" data-target="new-user-password" aria-label="Показать пароль">${icon('eye')}</button>
-            </span>
-          </label>
-          <label class="field"><span>Имя</span><input class="input" id="new-user-display" /></label>
-          <label class="checkline"><input type="checkbox" id="new-user-admin" /> Администратор</label>
-          <button class="btn tonal" data-settings-action="create-user">Добавить пользователя</button>
-        </div>
-      </section>` : ''}
+           <div class="settings-sub">
+             <div class="settings-sub-head">
+               <h5>ListenBrainz</h5>
+               <span class="settings-status"><span class="status-dot ${settings.listenbrainzConnected ? 'on' : ''}"></span>${settings.listenbrainzConnected ? 'подключён' : 'не подключён'}</span>
+             </div>
+             <p class="muted small">Бесплатно, без модерации и ключей приложения: нужен только личный токен.</p>
+             <ol class="steps">
+               <li>Откройте <a class="inline-link" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">listenbrainz.org/settings</a> и войдите.</li>
+               <li>Скопируйте «User token».</li>
+               <li>Вставьте его в поле ниже и сохраните.</li>
+             </ol>
+             <label class="field"><span>ListenBrainz token</span>
+               <input class="input" id="settings-listenbrainz" name="listenbrainz-token" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="${settings.listenbrainzConnected ? 'токен сохранён — вставьте новый, чтобы заменить' : 'токен из listenbrainz.org/settings'}" />
+             </label>
+             <div class="settings-inline">
+               <button class="btn primary" data-settings-action="save-scrobbling" data-scope="listenbrainz">${icon('check')} Сохранить токен</button>
+               ${settings.listenbrainzConnected ? `<button class="btn ghost danger" data-settings-action="disconnect-scrobbling" data-service="listenbrainz">${icon('logout')} Отключить</button>` : ''}
+             </div>
+           </div>
 
-      <section class="settings-section">
-        <h4>${icon('logout')} Сеанс</h4>
-        <p class="muted small">Вход действует 90 дней и продлевается автоматически, пока вы пользуетесь сайтом. Subsonic API: логин <code>${esc(state.me?.username || '')}</code>, пароль — ваш пароль. Ключ API: <code>${esc(settings.subsonicApiKey || '—')}</code></p>
-        <button class="btn ghost danger" data-settings-action="logout">${icon('logout')} Выйти из аккаунта</button>
-      </section>
+           <div class="settings-sub">
+             <div class="settings-sub-head">
+               <h5>Last.fm</h5>
+               <span class="settings-status"><span class="status-dot ${settings.lastfmConnected ? 'on' : ''}"></span>${settings.lastfmConnected ? `подключён${settings.lastfmUsername ? ` как ${esc(settings.lastfmUsername)}` : ''}` : 'не подключён'}</span>
+             </div>
+             <p class="muted small">Тоже бесплатно, но серверу нужны ключи приложения — их создаёт администратор один раз.</p>
+             <div class="settings-inline">
+               <button class="btn glass" data-settings-action="lastfm-connect" ${lastfmReady ? '' : 'disabled'}>${icon('wave')} Подключить Last.fm</button>
+               <button class="btn ghost" data-settings-action="lastfm-complete" ${settings.lastfmConnected ? 'disabled' : ''}>Завершить</button>
+               ${settings.lastfmConnected ? `<button class="btn ghost danger" data-settings-action="disconnect-scrobbling" data-service="lastfm">${icon('logout')} Отключить</button>` : ''}
+             </div>
+             ${lastfmReady ? '' : '<p class="muted small">Для авторизации Last.fm нужны ключи приложения ниже (или в config.toml).</p>'}
+             ${state.me?.isAdmin ? `
+               <div class="settings-sub">
+                 <h5>Ключи приложения Last.fm</h5>
+                 <p class="muted small">Создайте приложение на last.fm/api/account/create. Ключи пишутся в config.toml и применяются сразу.</p>
+                 <label class="field"><span>API key</span>
+                   <input class="input" id="settings-lastfm-api-key" name="lastfm-api-key" autocomplete="off" autocapitalize="none" spellcheck="false" data-lpignore="true" value="${esc(lastfmConfig.apiKey || '')}" placeholder="32 символа" />
+                 </label>
+                 <label class="field"><span>API secret</span>
+                   <input class="input" id="settings-lastfm-api-secret" name="lastfm-api-secret" type="password" autocomplete="new-password" data-lpignore="true" placeholder="${lastfmConfig.apiSecretSet ? 'секрет уже сохранён — оставьте пустым' : 'секрет приложения'}" />
+                 </label>
+                 <div class="settings-inline">
+                   <button class="btn tonal" data-settings-action="save-lastfm-app">Сохранить ключи приложения</button>
+                   <button class="btn ghost danger" data-settings-action="clear-lastfm-app">Удалить ключи</button>
+                 </div>
+               </div>` : ''}
+             <label class="field"><span>Last.fm session key (вручную)</span>
+               <input class="input" id="settings-lastfm-key" name="lastfm-session-key" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="оставьте пустым, чтобы не менять" />
+             </label>
+             <button class="btn tonal" data-settings-action="save-scrobbling" data-scope="lastfm">Сохранить Last.fm</button>
+           </div>`,
+        )}
+
+        ${panel(
+          'security',
+          `<h4>${icon('shield')} Безопасность</h4>
+           <form id="settings-password-form" class="settings-form">
+             <label class="field"><span>Текущий пароль</span>
+               <span class="input-wrap">
+                 <input class="input" id="settings-current-password" type="password" autocomplete="current-password" />
+                 <button class="reveal-btn" type="button" data-action="toggle-password" data-target="settings-current-password" aria-label="Показать пароль">${icon('eye')}</button>
+               </span>
+             </label>
+             <label class="field"><span>Новый пароль</span>
+               <span class="input-wrap">
+                 <input class="input" id="settings-new-password" type="password" autocomplete="new-password" />
+                 <button class="reveal-btn" type="button" data-action="toggle-password" data-target="settings-new-password" aria-label="Показать пароль">${icon('eye')}</button>
+               </span>
+             </label>
+             <button class="btn tonal" type="submit">Сменить пароль</button>
+           </form>
+           <div class="settings-sub">
+             <h5>Subsonic API</h5>
+             <p class="muted small">Для сторонних клиентов (Feishin, Symfonium, DSub и др.): сервер <code>${esc(location.origin)}</code>, логин <code>${esc(state.me?.username || '')}</code>, пароль — ваш пароль.</p>
+             <div class="settings-inline">
+               <input class="input settings-key" id="settings-api-key" readonly value="${esc(settings.subsonicApiKey || '—')}" />
+               <button class="btn glass" data-settings-action="copy-api-key">${icon('copy')} Скопировать ключ</button>
+             </div>
+           </div>
+           <div class="settings-sub">
+             <h5>Сеанс</h5>
+             <p class="muted small">Вход действует 90 дней и продлевается автоматически, пока вы пользуетесь сайтом.</p>
+             <button class="btn ghost danger" data-settings-action="logout">${icon('logout')} Выйти из аккаунта</button>
+           </div>`,
+        )}
+
+        ${panel(
+          'library',
+          `<h4>${icon('library')} Библиотека</h4>
+           <p class="muted small">Сканер перечитывает папки каждые ${state.authConfig?.scanInterval || 300} секунд. Новые файлы появятся автоматически.</p>
+           <div class="settings-inline">
+             <button class="btn glass" data-settings-action="rescan">${icon('refresh')} Пересканировать сейчас</button>
+             <button class="btn ghost danger" data-settings-action="clear-history">${icon('delete')} Очистить историю</button>
+           </div>`,
+        )}
+
+        ${
+          state.me?.isAdmin
+            ? panel(
+                'users',
+                `<h4>${icon('person')} Пользователи</h4>
+                 <p class="muted small">Новый человек может войти двумя способами: вы создаёте ему логин и пароль здесь, либо выдаёте код приглашения — блок «Приглашения» на странице профиля.</p>
+                 <div class="user-list" id="settings-user-list">
+                   ${(users || [])
+                     .map(
+                       (user) => `
+                     <div class="user-row">
+                       <span class="user-avatar small">${esc(initials(user.displayName || user.username))}</span>
+                       <span class="user-row-main"><strong>${esc(user.displayName || user.username)}</strong><small>@${esc(user.username)}${user.isAdmin ? ' · админ' : ''}</small></span>
+                       ${user.id === state.me?.id ? '<span class="chip">вы</span>' : `<button class="icon-btn" data-settings-action="delete-user" data-id="${user.id}" title="Удалить">${icon('delete')}</button>`}
+                     </div>`,
+                     )
+                     .join('')}
+                 </div>
+                 <div class="settings-form user-create">
+                   <label class="field"><span>Логин</span><input class="input" id="new-user-name" autocapitalize="none" /></label>
+                   <label class="field"><span>Пароль</span>
+                     <span class="input-wrap">
+                       <input class="input" id="new-user-password" type="password" autocomplete="new-password" />
+                       <button class="reveal-btn" type="button" data-action="toggle-password" data-target="new-user-password" aria-label="Показать пароль">${icon('eye')}</button>
+                     </span>
+                   </label>
+                   <label class="field"><span>Имя</span><input class="input" id="new-user-display" /></label>
+                   <label class="checkline"><input type="checkbox" id="new-user-admin" /> Администратор</label>
+                   <button class="btn tonal" data-settings-action="create-user">Добавить пользователя</button>
+                 </div>`,
+              )
+            : ''
+        }
+
+        ${panel(
+          'about',
+          `<h4>${icon('sparkle')} О сервисе</h4>
+           <div class="info-list">
+             <div class="info-row"><span>Сервер</span><strong>Rustream ${esc(state.version || '0.1.0')}</strong></div>
+             <div class="info-row"><span>API</span><strong>Subsonic 1.16.1 · OpenSubsonic</strong></div>
+             <div class="info-row"><span>Адрес</span><strong>${esc(location.origin)}</strong></div>
+             <div class="info-row"><span>Расширения</span><strong>songLyrics</strong></div>
+           </div>
+           <p class="muted small">Локальная библиотека сканируется автоматически, YouTube Music работает через ваш аккаунт, тексты песен приходят из LRCLIB с построчной и пословной синхронизацией.</p>`,
+        )}
+      </div>
     </div>`;
 }
 
@@ -2521,6 +2733,7 @@ async function openSettings() {
 
   showModal({
     title: 'Аккаунт и настройки',
+    wide: true,
     body: settingsBody(users),
     onMount: (modal) => {
       $('#settings-profile-form', modal)?.addEventListener('submit', async (event) => {
@@ -2531,6 +2744,18 @@ async function openSettings() {
           updateUserUi();
           toast('Имя обновлено');
         } catch (error) {
+          toast(error.message, 'error');
+        }
+      });
+
+      $('#settings-data-saver', modal)?.addEventListener('change', async (event) => {
+        const enabled = event.target.checked;
+        try {
+          await api.updateMe({ dataSaver: enabled });
+          state.meSettings = { ...(state.meSettings || {}), dataSaver: enabled };
+          toast(enabled ? 'Экономия трафика включена' : 'Максимальное качество');
+        } catch (error) {
+          event.target.checked = !enabled;
           toast(error.message, 'error');
         }
       });
@@ -2568,9 +2793,48 @@ async function openSettings() {
           return;
         }
 
+        const tab = event.target.closest('[data-settings-tab]');
+        if (tab) {
+          state.settingsTab = tab.dataset.settingsTab;
+          $$('[data-settings-tab]', modal).forEach((item) =>
+            item.classList.toggle('active', item.dataset.settingsTab === state.settingsTab),
+          );
+          $$('[data-settings-panel]', modal).forEach((panel) => {
+            panel.hidden = panel.dataset.settingsPanel !== state.settingsTab;
+          });
+          return;
+        }
+
         const button = event.target.closest('[data-settings-action]');
         if (!button) return;
         const action = button.dataset.settingsAction;
+
+        if (action === 'copy-api-key') {
+          const key = $('#settings-api-key', modal)?.value || '';
+          try {
+            await navigator.clipboard.writeText(key);
+            toast('Ключ API скопирован');
+          } catch (error) {
+            toast('Браузер не дал скопировать ключ', 'error');
+          }
+          return;
+        }
+        if (action === 'disconnect-scrobbling') {
+          const service = button.dataset.service;
+          const name = service === 'listenbrainz' ? 'ListenBrainz' : 'Last.fm';
+          if (!confirm(`Отключить ${name}? Уже отправленные прослушивания останутся там.`)) return;
+          try {
+            await api.disconnectScrobbling(service);
+            const me = await api.getMe();
+            state.meSettings = me.settings;
+            toast(`${name} отключён`);
+            closeModal();
+            openSettings();
+          } catch (error) {
+            toast(error.message, 'error');
+          }
+          return;
+        }
 
         if (action === 'logout') {
           await api.logout().catch(() => {});
@@ -2655,7 +2919,7 @@ async function openSettings() {
         }
         if (action === 'save-scrobbling') {
           // Две отдельные кнопки: не затираем Last.fm пустым полем и наоборот.
-          const scope = actionEl.dataset.scope || 'both';
+          const scope = button.dataset.scope || 'both';
           const body = {};
           if (scope !== 'lastfm') body.listenbrainzToken = $('#settings-listenbrainz', modal).value.trim();
           if (scope !== 'listenbrainz') body.lastfmSessionKey = $('#settings-lastfm-key', modal).value.trim();
@@ -2664,6 +2928,9 @@ async function openSettings() {
             toast(scope === 'listenbrainz' ? 'Токен ListenBrainz сохранён' : 'Last.fm сохранён');
             const me = await api.getMe();
             state.meSettings = me.settings;
+            // Re-render so the connection badge flips to "подключён" right away.
+            closeModal();
+            openSettings();
           } catch (error) {
             toast(error.message, 'error');
           }
@@ -3099,7 +3366,7 @@ async function renderYtm(seq, tab = 'search') {
         <div class="section-head">
           <div>
             <h2>${icon('ytm')} Недавно из YouTube</h2>
-            <p class="muted">Всё, что вы уже искали или слушали — можно вернуться без нового поиска</p>
+            <p class="muted">Треки, которые вы уже слушали — можно вернуться без нового поиска</p>
           </div>
         </div>
         <div id="ytm-history"></div>
@@ -3216,6 +3483,18 @@ async function renderYtm(seq, tab = 'search') {
 // Global actions
 // ---------------------------------------------------------------------------
 
+// A cover that 404s leaves the browser's alt text inside the artwork box, and
+// `:has(img)` keeps the fallback icon hidden. Drop the broken <img> so the
+// music-note placeholder shows instead.
+document.addEventListener(
+  'error',
+  (event) => {
+    const img = event.target;
+    if (img instanceof HTMLImageElement && img.closest('.cover')) img.remove();
+  },
+  true,
+);
+
 document.addEventListener('click', async (event) => {
   const actionEl = event.target.closest('[data-action]');
   if (!actionEl) return;
@@ -3269,6 +3548,14 @@ document.addEventListener('click', async (event) => {
     const tracks = await loadAllTracks();
     state.currentTracks = tracks;
     await player.playTracks(tracks, 0, { shuffle: true });
+    return;
+  }
+  if (action === 'play-library') {
+    const tracks = await loadAllTracks();
+    if (!tracks.length) return toast('Библиотека пуста', 'warn');
+    state.currentTracks = tracks;
+    setLiveMode(false);
+    await player.playTracks(tracks, 0);
     return;
   }
   if (action === 'start-live') {
@@ -3579,6 +3866,21 @@ $('#volume').addEventListener('input', (event) => {
   player.setVolume(Number(event.target.value));
   updateVolumeUi();
 });
+
+// Wheel over the volume slider adjusts it instead of scrolling the page.
+// Delegated because the sheet's slider is re-rendered with the player.
+document.addEventListener(
+  'wheel',
+  (event) => {
+    const input = event.target.closest?.('#volume, #np-volume');
+    if (!input) return;
+    event.preventDefault();
+    const step = event.deltaY < 0 ? 4 : -4;
+    player.setVolume(Math.min(100, Math.max(0, player.volumePercent + step)));
+    updateVolumeUi();
+  },
+  { passive: false },
+);
 
 // Keyboard
 const PRIMARY_TABS = ['home', 'live', 'library', 'stats', 'search'];

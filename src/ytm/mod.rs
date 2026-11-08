@@ -11,7 +11,6 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use bytes::Bytes;
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
 use std::collections::{HashMap, HashSet};
@@ -26,14 +25,13 @@ use cookies::Cookie;
 use innertube::{Account, Song};
 
 pub const ID_PREFIX: &str = "ytm-";
-/// googlevideo throttles long un-ranged downloads to real-time speed, but
-/// serves small ranges at full speed, so everything is fetched in chunks.
-const CHUNK: u64 = 1024 * 1024;
+/// How long a resolved CDN URL is trusted before asking yt-dlp again.
 const RESOLVE_TTL: Duration = Duration::from_secs(4 * 3600);
 const YTDLP_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// (user id, video id)
-type TrackKey = (String, String);
+/// (user id, video id, data-saver flag). The flag is part of the key so a
+/// cached high-quality URL is not reused after switching to saver mode.
+type TrackKey = (String, String, bool);
 
 #[derive(Clone)]
 struct Resolved {
@@ -187,7 +185,7 @@ async fn forget_resolved(state: &YtmState, user_id: &str) {
         .resolved
         .lock()
         .await
-        .retain(|(owner, _), _| owner != user_id);
+        .retain(|(owner, _, _), _| owner != user_id);
 }
 
 pub async fn status(db: &SqlitePool, user_id: &str) -> Result<Value> {
@@ -202,6 +200,149 @@ pub async fn status(db: &SqlitePool, user_id: &str) -> Result<Value> {
     };
     let account: Option<Account> = account.and_then(|text| serde_json::from_str(&text).ok());
     Ok(json!({ "connected": true, "account": account, "updatedAt": updated_at }))
+}
+
+// ---------------------------------------------------------------------------
+// Local library preference
+// ---------------------------------------------------------------------------
+
+/// (track id, file path, suffix, content type, title, artist, bitrate, duration)
+type LocalRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<i64>,
+    i64,
+);
+
+/// A track that exists in the local library, used instead of YouTube audio.
+pub struct LocalTrack {
+    pub id: String,
+    pub path: String,
+    pub suffix: String,
+    pub content_type: String,
+    pub bitrate: Option<i64>,
+}
+
+/// Lowercase, strip bracketed noise ("(Remastered)", "[Official Video]"),
+/// drop punctuation and collapse spaces. YouTube and file tags rarely agree
+/// character for character, so comparison happens on this form.
+fn normalize(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut depth = 0usize;
+    for ch in value.chars() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if depth > 0 => {}
+            c if c.is_alphanumeric() => out.extend(c.to_lowercase()),
+            _ => out.push(' '),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Longest word of a normalized title, used to narrow the SQL query.
+fn search_token(normalized: &str) -> Option<String> {
+    normalized
+        .split_whitespace()
+        .filter(|word| word.chars().count() >= 3)
+        .max_by_key(|word| word.chars().count())
+        .map(|word| word.to_string())
+}
+
+/// Find the local file for a YouTube track. Duration is the tie-breaker: a
+/// cover or a live version can share the title, but not both artist and length.
+pub async fn local_match(
+    db: &SqlitePool,
+    title: &str,
+    artist: &str,
+    duration_ms: i64,
+) -> Option<LocalTrack> {
+    let title_norm = normalize(title);
+    if title_norm.is_empty() {
+        return None;
+    }
+    let token = search_token(&title_norm)?;
+    // SQLite's LIKE/lower() only fold ASCII, so a Cyrillic title would never
+    // match by text alone. Rows of the same length are pulled in too; the
+    // normalized comparison below is what actually decides.
+    let rows: Vec<LocalRow> = sqlx::query_as(
+        "SELECT t.track_id, t.file_path, t.suffix, t.content_type, t.title, a.name,
+                    t.bitrate, t.duration_ms
+             FROM tracks t JOIN artists a ON a.artist_id = t.artist_id
+             WHERE lower(t.title) LIKE ? OR t.duration_ms BETWEEN ? AND ?",
+    )
+    .bind(format!("%{token}%"))
+    .bind(duration_ms - 8_000)
+    .bind(duration_ms + 8_000)
+    .fetch_all(db)
+    .await
+    .ok()?;
+
+    let artist_norm = normalize(artist);
+    let mut best: Option<(i64, LocalTrack)> = None;
+    for (id, path, suffix, content_type, row_title, row_artist, bitrate, row_duration) in rows {
+        let row_title_norm = normalize(&row_title);
+        if row_title_norm != title_norm
+            && !(row_title_norm.contains(&title_norm) || title_norm.contains(&row_title_norm))
+        {
+            continue;
+        }
+        let row_artist_norm = normalize(&row_artist);
+        let artist_ok = artist_norm.is_empty()
+            || row_artist_norm == artist_norm
+            || row_artist_norm.contains(&artist_norm)
+            || artist_norm.contains(&row_artist_norm);
+        let diff = (row_duration - duration_ms).abs();
+        // Same song, different master: allow 8s, but an artist mismatch must be
+        // covered by a near-exact duration.
+        let duration_ok = diff <= 8_000;
+        if !duration_ok || (!artist_ok && diff > 2_000) {
+            continue;
+        }
+        if best
+            .as_ref()
+            .is_some_and(|(best_diff, _)| *best_diff <= diff)
+        {
+            continue;
+        }
+        best = Some((
+            diff,
+            LocalTrack {
+                id,
+                path,
+                suffix,
+                content_type,
+                bitrate,
+            },
+        ));
+    }
+    best.map(|(_, track)| track)
+}
+
+/// Add the local file's quality to a YouTube listing entry so the UI shows
+/// FLAC (and the real bitrate) instead of a generic m4a.
+async fn attach_local(
+    db: &SqlitePool,
+    value: &mut Value,
+    title: &str,
+    artist: &str,
+    duration_ms: i64,
+) {
+    let Some(local) = local_match(db, title, artist, duration_ms).await else {
+        return;
+    };
+    value["suffix"] = Value::String(local.suffix);
+    value["contentType"] = Value::String(local.content_type);
+    if let Some(bitrate) = local.bitrate {
+        value["bitRate"] = Value::from(bitrate);
+    }
+    value["localId"] = Value::String(local.id);
+    value["localSource"] = Value::Bool(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -228,7 +369,20 @@ pub async fn list(
         Listing::Liked => innertube::liked(&state.client, &cookies, limit).await?,
     };
     remember(db, user_id, &songs).await?;
-    Ok(Some(songs.iter().map(song_json).collect()))
+    let mut tracks = Vec::with_capacity(songs.len());
+    for song in &songs {
+        let mut value = song_json(song);
+        attach_local(
+            db,
+            &mut value,
+            &song.title,
+            &song.artist,
+            song.duration_secs * 1000,
+        )
+        .await;
+        tracks.push(value);
+    }
+    Ok(Some(tracks))
 }
 
 /// How many upcoming tracks are resolved in the background. Each one costs a
@@ -252,11 +406,14 @@ pub fn spawn_prefetch(
         let Ok(Some(cookies)) = load_cookies(&db, &user_id).await else {
             return;
         };
+        let saver = crate::auth::data_saver(&db, &user_id).await;
         for id in ids.into_iter().take(PREFETCH_LIMIT) {
             let Some(video_id) = video_id(&id) else {
                 continue;
             };
-            if let Err(error) = resolve(&state, &db, &config, &user_id, video_id, &cookies).await {
+            if let Err(error) =
+                resolve(&state, &db, &config, &user_id, video_id, &cookies, saver).await
+            {
                 tracing::debug!("YouTube Music prefetch failed for {video_id}: {error}");
             }
         }
@@ -292,43 +449,56 @@ async fn remember(db: &SqlitePool, user_id: &str, songs: &[Song]) -> Result<()> 
     Ok(())
 }
 
-/// Треки YouTube, которые этот профиль уже слушал или находил.
+/// Треки YouTube, которые этот профиль уже слушал.
 /// Живёт в локальной БД, поэтому доступен без похода в YouTube —
 /// это и есть «главная» вкладки YouTube до первого поиска.
+///
+/// `ytm_tracks` — ещё и кэш метаданных: туда попадает каждый результат
+/// поиска. Поэтому историю строим по `plays`, иначе одна выдача забивает
+/// «Недавно из YouTube» десятком версий одного трека.
 pub async fn history(db: &SqlitePool, user_id: &str, limit: usize) -> Result<Vec<Value>> {
     let rows: Vec<(String, String, String, String, i64)> = sqlx::query_as(
-        "SELECT video_id, title, artist, album, duration_ms
-         FROM ytm_tracks
-         WHERE user_id = ?
-         ORDER BY last_used_at DESC
+        "SELECT t.video_id, t.title, t.artist, t.album, t.duration_ms
+         FROM ytm_tracks t
+         JOIN (
+             SELECT track_id, MAX(started_at) AS played_at
+             FROM plays
+             WHERE user_id = ?
+             GROUP BY track_id
+         ) p ON p.track_id = ? || t.video_id
+         WHERE t.user_id = ?
+         ORDER BY p.played_at DESC
          LIMIT ?",
     )
+    .bind(user_id)
+    .bind(ID_PREFIX)
     .bind(user_id)
     .bind(limit as i64)
     .fetch_all(db)
     .await?;
 
-    Ok(rows
-        .into_iter()
-        .map(|(video_id, title, artist, album, duration_ms)| {
-            let id = format!("{ID_PREFIX}{video_id}");
-            json!({
-                "id": id,
-                "parent": "",
-                "isDir": false,
-                "title": title,
-                "album": album,
-                "artist": artist,
-                "coverArt": id,
-                "duration": duration_ms / 1000,
-                "suffix": "m4a",
-                "contentType": "audio/mp4",
-                "isVideo": false,
-                "type": "music",
-                "source": "ytm",
-            })
-        })
-        .collect())
+    let mut tracks = Vec::with_capacity(rows.len());
+    for (video_id, title, artist, album, duration_ms) in rows {
+        let id = format!("{ID_PREFIX}{video_id}");
+        let mut value = json!({
+            "id": id,
+            "parent": "",
+            "isDir": false,
+            "title": title,
+            "album": album,
+            "artist": artist,
+            "coverArt": id,
+            "duration": duration_ms / 1000,
+            "suffix": "m4a",
+            "contentType": "audio/mp4",
+            "isVideo": false,
+            "type": "music",
+            "source": "ytm",
+        });
+        attach_local(db, &mut value, &title, &artist, duration_ms).await;
+        tracks.push(value);
+    }
+    Ok(tracks)
 }
 
 fn song_json(song: &Song) -> Value {
@@ -466,6 +636,15 @@ pub async fn serve_stream(
         .await
         .ok();
 
+    // Max quality: a YouTube track that also exists locally (usually FLAC) is
+    // streamed from the library, not re-downloaded from YouTube.
+    if let Some(local) = local_match(db, &meta.title, &meta.artist, meta.duration_ms).await {
+        let path = Path::new(&local.path);
+        if tokio::fs::try_exists(path).await.unwrap_or(false) {
+            return crate::streaming::serve_file(path, &local.content_type, headers).await;
+        }
+    }
+
     if let Some(path) = meta.file_path.as_deref() {
         let path = Path::new(path);
         if tokio::fs::try_exists(path).await.unwrap_or(false) {
@@ -478,17 +657,34 @@ pub async fn serve_stream(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::FORBIDDEN)?;
-    let resolved = resolve(state, db, config, user_id, video_id, &cookies)
+    let saver = crate::auth::data_saver(db, user_id).await;
+    let mut resolved = resolve(state, db, config, user_id, video_id, &cookies, saver)
         .await
         .map_err(|error| {
             tracing::warn!("YouTube Music resolve failed for {video_id}: {error}");
             StatusCode::BAD_GATEWAY
         })?;
 
+    let mut response = proxy(state, &resolved, headers).await;
+    // A cached URL dies long before its `expire` timestamp: googlevideo stops
+    // serving bytes past the traffic its signature allows. One fresh resolve
+    // fixes the track, and the broken entry does not poison the next play.
+    if response.status() == StatusCode::BAD_GATEWAY {
+        match refresh_resolved(state, db, config, user_id, video_id, &cookies, saver).await {
+            Ok(fresh) => {
+                resolved = fresh;
+                response = proxy(state, &resolved, headers).await;
+            }
+            Err(error) => {
+                tracing::warn!("YouTube Music re-resolve failed for {video_id}: {error}");
+            }
+        }
+    }
+
     if config.ytm_cache_max_mb > 0 {
         spawn_download(state, db, config, user_id, video_id, &resolved).await;
     }
-    Ok(proxy(state, &resolved, headers))
+    Ok(response)
 }
 
 async fn resolve(
@@ -498,8 +694,9 @@ async fn resolve(
     user_id: &str,
     video_id: &str,
     cookies: &[Cookie],
+    saver: bool,
 ) -> Result<Resolved> {
-    let key = (user_id.to_string(), video_id.to_string());
+    let key = (user_id.to_string(), video_id.to_string(), saver);
     if let Some(found) = memory_cached(state, &key).await {
         return Ok(found);
     }
@@ -526,7 +723,7 @@ async fn resolve(
         return Ok(found);
     }
 
-    let result = ytdlp_resolve(state, config, video_id, cookies).await;
+    let result = ytdlp_resolve(state, config, video_id, cookies, saver).await;
     state.inflight.lock().await.remove(&key);
     let resolved = result?;
     state
@@ -546,8 +743,8 @@ async fn memory_cached(state: &YtmState, key: &TrackKey) -> Option<Resolved> {
 /// A resolved URL survives a restart, so the first play after an upgrade (or
 /// from another device) is as fast as a cached one.
 async fn db_cached(db: &SqlitePool, key: &TrackKey) -> Option<Resolved> {
-    let row: Option<(String, String, i64, i64)> = sqlx::query_as(
-        "SELECT resolved_url, resolved_ext, resolved_size, resolved_at
+    let row: Option<(String, String, i64, i64, Option<i64>)> = sqlx::query_as(
+        "SELECT resolved_url, resolved_ext, resolved_size, resolved_at, resolved_saver
          FROM ytm_tracks WHERE user_id = ? AND video_id = ?",
     )
     .bind(&key.0)
@@ -555,9 +752,13 @@ async fn db_cached(db: &SqlitePool, key: &TrackKey) -> Option<Resolved> {
     .fetch_optional(db)
     .await
     .ok()?;
-    let (url, ext, size, at) = row?;
+    let (url, ext, size, at, saver) = row?;
     let age = chrono::Utc::now().timestamp() - at;
-    if url.is_empty() || size <= 0 || !(0..RESOLVE_TTL.as_secs() as i64).contains(&age) {
+    if url.is_empty()
+        || size <= 0
+        || saver.unwrap_or(0) != i64::from(key.2)
+        || !(0..RESOLVE_TTL.as_secs() as i64).contains(&age)
+    {
         return None;
     }
     Some(Resolved {
@@ -570,13 +771,15 @@ async fn db_cached(db: &SqlitePool, key: &TrackKey) -> Option<Resolved> {
 
 async fn store_resolved(db: &SqlitePool, key: &TrackKey, resolved: &Resolved) {
     sqlx::query(
-        "UPDATE ytm_tracks SET resolved_url = ?, resolved_ext = ?, resolved_size = ?, resolved_at = ?
+        "UPDATE ytm_tracks SET resolved_url = ?, resolved_ext = ?, resolved_size = ?, resolved_at = ?,
+                resolved_saver = ?
          WHERE user_id = ? AND video_id = ?",
     )
     .bind(&resolved.url)
     .bind(&resolved.ext)
     .bind(resolved.size as i64)
     .bind(chrono::Utc::now().timestamp())
+    .bind(i64::from(key.2))
     .bind(&key.0)
     .bind(&key.1)
     .execute(db)
@@ -591,9 +794,10 @@ async fn ytdlp_resolve(
     config: &Config,
     video_id: &str,
     cookies: &[Cookie],
+    saver: bool,
 ) -> Result<Resolved> {
     let cookie_file = write_cookie_file(cookies).await?;
-    let first = run_ytdlp(config, video_id, Some(&cookie_file)).await;
+    let first = run_ytdlp(config, video_id, Some(&cookie_file), saver).await;
     tokio::fs::remove_file(&cookie_file).await.ok();
 
     // Cookies из профиля могут протухнуть (SAPISID легко инвалидируется
@@ -616,7 +820,7 @@ async fn ytdlp_resolve(
             tracing::warn!(
                 "YouTube Music: cookies профиля не сработали ({reason}); повторяю без cookies"
             );
-            let retry = run_ytdlp(config, video_id, None).await?;
+            let retry = run_ytdlp(config, video_id, None, saver).await?;
             if !retry.status.success() {
                 let stderr = String::from_utf8_lossy(&retry.stderr);
                 return Err(anyhow!("yt-dlp failed без cookies: {}", stderr.trim()));
@@ -630,7 +834,7 @@ async fn ytdlp_resolve(
             tracing::warn!(
                 "YouTube Music: cookies профиля не сработали ({error}); повторяю без cookies"
             );
-            let retry = run_ytdlp(config, video_id, None).await?;
+            let retry = run_ytdlp(config, video_id, None, saver).await?;
             if !retry.status.success() {
                 let stderr = String::from_utf8_lossy(&retry.stderr);
                 return Err(anyhow!("yt-dlp failed без cookies: {}", stderr.trim()));
@@ -686,6 +890,7 @@ async fn run_ytdlp(
     config: &Config,
     video_id: &str,
     cookies: Option<&Path>,
+    saver: bool,
 ) -> Result<std::process::Output> {
     let mut command = tokio::process::Command::new(&config.ytdlp_path);
     command.args([
@@ -697,7 +902,12 @@ async fn run_ytdlp(
         "--socket-timeout",
         "15",
         "-f",
-        "bestaudio[ext=m4a]/bestaudio",
+        // Saver mode: ~48 kbps Opus/m4a if YouTube has it, never above 64.
+        if saver {
+            "bestaudio[abr<=64]/bestaudio[ext=m4a]/bestaudio"
+        } else {
+            "bestaudio[ext=m4a]/bestaudio"
+        },
         "-O",
         "%(.{url,ext,filesize,filesize_approx})j",
     ]);
@@ -732,20 +942,43 @@ async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {
     Ok(path)
 }
 
-async fn fetch_chunk(client: &reqwest::Client, url: &str, start: u64, end: u64) -> Result<Bytes> {
-    let response = client
-        .get(url)
-        .header(header::RANGE, format!("bytes={start}-{end}"))
-        .send()
-        .await?;
-    if response.status() != StatusCode::PARTIAL_CONTENT && response.status() != StatusCode::OK {
-        return Err(anyhow!("upstream returned {}", response.status()));
-    }
-    Ok(response.bytes().await?)
+/// Drop a cached CDN URL and ask yt-dlp for a new one. Googlevideo signs each
+/// URL for a limited amount of traffic, so an old entry starts answering 403
+/// in the middle of a track.
+async fn refresh_resolved(
+    state: &YtmState,
+    db: &SqlitePool,
+    config: &Config,
+    user_id: &str,
+    video_id: &str,
+    cookies: &[Cookie],
+    saver: bool,
+) -> Result<Resolved> {
+    let key = (user_id.to_string(), video_id.to_string(), saver);
+    state.resolved.lock().await.remove(&key);
+    sqlx::query("UPDATE ytm_tracks SET resolved_url = NULL, resolved_at = NULL WHERE user_id = ? AND video_id = ?")
+        .bind(user_id)
+        .bind(video_id)
+        .execute(db)
+        .await
+        .ok();
+
+    let resolved = ytdlp_resolve(state, config, video_id, cookies, saver).await?;
+    state
+        .resolved
+        .lock()
+        .await
+        .insert(key.clone(), resolved.clone());
+    store_resolved(db, &key, &resolved).await;
+    Ok(resolved)
 }
 
-/// Serve the requested byte range by fetching it from the CDN in chunks.
-fn proxy(state: &YtmState, resolved: &Resolved, headers: &HeaderMap) -> Response {
+/// Serve the requested byte range by passing a single upstream request through.
+///
+/// This used to fetch 1 MiB chunks, which broke behind the reverse proxy of the
+/// deployment: the CDN answered the first range, and every follow-up request
+/// hung until the client gave up — playback stopped after exactly one chunk.
+async fn proxy(state: &YtmState, resolved: &Resolved, headers: &HeaderMap) -> Response {
     let size = resolved.size;
     let requested = headers
         .get(header::RANGE)
@@ -763,30 +996,38 @@ fn proxy(state: &YtmState, resolved: &Resolved, headers: &HeaderMap) -> Response
         None => (0, size.saturating_sub(1), false),
     };
 
-    let client = state.client.clone();
-    let url = resolved.url.clone();
-    let stream = futures_util::stream::unfold(start, move |position| {
-        let client = client.clone();
-        let url = url.clone();
-        async move {
-            if position > end {
-                return None;
-            }
-            let chunk_end = (position + CHUNK - 1).min(end);
-            match fetch_chunk(&client, &url, position, chunk_end).await {
-                Ok(bytes) if !bytes.is_empty() => {
-                    let next = position + bytes.len() as u64;
-                    Some((Ok::<Bytes, std::io::Error>(bytes), next))
-                }
-                Ok(_) => None,
-                Err(error) => Some((Err(std::io::Error::other(error.to_string())), end + 1)),
-            }
+    let response = match state
+        .client
+        .get(&resolved.url)
+        .header(header::RANGE, format!("bytes={start}-{end}"))
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::warn!("YouTube Music CDN request failed: {error}");
+            return StatusCode::BAD_GATEWAY.into_response();
         }
-    });
+    };
+    let status = response.status();
+    if status != StatusCode::PARTIAL_CONTENT && status != StatusCode::OK {
+        tracing::warn!("YouTube Music CDN answered {status} for bytes={start}-{end}");
+        return StatusCode::BAD_GATEWAY.into_response();
+    }
+    // A range was asked for but the CDN sent the whole file: its length would
+    // not match the Content-Range we are about to advertise.
+    if partial && status == StatusCode::OK {
+        tracing::warn!("YouTube Music CDN ignored the range request");
+        return StatusCode::BAD_GATEWAY.into_response();
+    }
 
+    let stream = response.bytes_stream();
     let mut builder = Response::builder()
         .header(header::CONTENT_TYPE, content_type(&resolved.ext))
-        .header(header::CONTENT_LENGTH, end - start + 1)
+        .header(
+            header::CONTENT_LENGTH,
+            if partial { end - start + 1 } else { size },
+        )
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CACHE_CONTROL, "no-cache");
     builder = if partial {
@@ -858,17 +1099,16 @@ async fn download(
     tokio::fs::create_dir_all(dir).await?;
     let partial = target.with_extension("part");
     let mut file = tokio::fs::File::create(&partial).await?;
-    let mut position = 0;
-    while position < resolved.size {
-        let end = (position + CHUNK - 1).min(resolved.size - 1);
-        let bytes = match fetch_chunk(client, &resolved.url, position, end).await {
-            Ok(bytes) if !bytes.is_empty() => bytes,
-            Ok(_) => break,
-            Err(error) => {
-                tokio::fs::remove_file(&partial).await.ok();
-                return Err(error);
-            }
-        };
+
+    // One request for the whole file, written as it arrives: chunked range
+    // requests stall behind the deployment's proxy after the first chunk.
+    let mut response = client.get(&resolved.url).send().await?;
+    if !response.status().is_success() {
+        tokio::fs::remove_file(&partial).await.ok();
+        return Err(anyhow!("CDN returned {}", response.status()));
+    }
+    let mut position = 0u64;
+    while let Some(bytes) = response.chunk().await? {
         file.write_all(&bytes).await?;
         position += bytes.len() as u64;
     }
@@ -918,6 +1158,66 @@ async fn evict(db: &SqlitePool, cache_dir: &Path, max_bytes: u64) -> Result<()> 
 mod tests {
     use super::*;
 
+    async fn seed_local_track(db: &SqlitePool, title: &str, artist: &str, duration_ms: i64) {
+        let now = chrono::Utc::now().timestamp();
+        sqlx::query(
+            "INSERT OR IGNORE INTO artists (artist_id, name, created_at) VALUES ('a1', ?, ?)",
+        )
+        .bind(artist)
+        .bind(now)
+        .execute(db)
+        .await
+        .unwrap();
+        sqlx::query("INSERT OR IGNORE INTO albums (album_id, artist_id, title, created_at) VALUES ('al1', 'a1', ?, ?)")
+            .bind(title)
+            .bind(now)
+            .execute(db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO tracks (track_id, album_id, artist_id, title, duration_ms, file_path,
+                file_size, suffix, content_type, bitrate, created_at)
+             VALUES ('t1', 'al1', 'a1', ?, ?, '/music/a.flac', 1, 'flac', 'audio/flac', 1411, ?)",
+        )
+        .bind(title)
+        .bind(duration_ms)
+        .bind(now)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn matches_local_flac_for_a_youtube_track() {
+        let db = crate::db::test_pool().await;
+        seed_local_track(&db, "The Past", "Chikoi The Maid", 214_000).await;
+
+        // YouTube titles carry bracketed noise and different casing.
+        let found = local_match(&db, "The Past (Official Video)", "chikoi the maid", 213_000)
+            .await
+            .expect("local match");
+        assert_eq!(found.suffix, "flac");
+        assert_eq!(found.path, "/music/a.flac");
+
+        // Same title, but a different song (duration far off) must not match.
+        assert!(local_match(&db, "The Past", "Chikoi The Maid", 60_000)
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn matches_cyrillic_titles_despite_sqlite_case_folding() {
+        let db = crate::db::test_pool().await;
+        seed_local_track(&db, "Тёмная ночь", "Кино", 200_000).await;
+
+        // SQLite's lower()/LIKE cannot fold non-ASCII case, so this only works
+        // because the duration window brings the row in.
+        let found = local_match(&db, "ТЁМНАЯ НОЧЬ", "кино", 201_000)
+            .await
+            .expect("local match");
+        assert_eq!(found.suffix, "flac");
+    }
+
     /// End-to-end check of the parts that touch the real CDN. Needs network
     /// access and yt-dlp: `cargo test -- --ignored`.
     #[tokio::test]
@@ -929,14 +1229,14 @@ mod tests {
         };
         let state = YtmState::new(None).unwrap();
         let db = crate::db::test_pool().await;
-        let resolved = resolve(&state, &db, &config, "u", "kJQP7kiw5Fk", &[])
+        let resolved = resolve(&state, &db, &config, "u", "kJQP7kiw5Fk", &[], false)
             .await
             .unwrap();
         assert!(resolved.size > 100_000, "size {}", resolved.size);
 
         let mut headers = HeaderMap::new();
         headers.insert(header::RANGE, "bytes=0-1023".parse().unwrap());
-        let response = proxy(&state, &resolved, &headers);
+        let response = proxy(&state, &resolved, &headers).await;
         assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
         assert_eq!(
             response
@@ -950,7 +1250,7 @@ mod tests {
             .unwrap();
         assert_eq!(head.len(), 1024);
 
-        // A range far past the first chunk, to prove chunk chaining works.
+        // A range far past the first chunk, to prove range passthrough works.
         let start = resolved.size - 2048;
         headers.insert(
             header::RANGE,
@@ -958,7 +1258,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         );
-        let response = proxy(&state, &resolved, &headers);
+        let response = proxy(&state, &resolved, &headers).await;
         let tail = axum::body::to_bytes(response.into_body(), 8192)
             .await
             .unwrap();

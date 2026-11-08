@@ -65,7 +65,10 @@ pub fn protected_routes() -> Router<Arc<RwLock<AppState>>> {
         .route("/api/me", get(me::api_me).patch(me::api_update_me))
         .route("/api/me/stats", get(library::api_me_stats))
         .route("/api/me/password", post(me::api_change_password))
-        .route("/api/me/scrobbling", put(me::api_update_scrobbling))
+        .route(
+            "/api/me/scrobbling",
+            put(me::api_update_scrobbling).delete(me::api_disconnect_scrobbling),
+        )
         .route(
             "/api/me/ratings",
             get(me::api_get_ratings).put(me::api_set_rating),

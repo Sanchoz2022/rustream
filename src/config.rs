@@ -31,6 +31,11 @@ pub struct Config {
     /// `http://host:3128`), used by both InnerTube requests and yt-dlp.
     #[serde(default)]
     pub ytm_proxy: Option<String>,
+    /// Optional proxy for the lyric services. LRCLIB limits the number of
+    /// requests per IP address, so a deployment behind a shared address needs
+    /// a proxy of its own.
+    #[serde(default)]
+    pub lyrics_proxy: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -73,6 +78,7 @@ impl Default for Config {
             ytm_cache_dir: default_ytm_cache_dir(),
             ytm_cache_max_mb: default_ytm_cache_max_mb(),
             ytm_proxy: None,
+            lyrics_proxy: None,
         }
     }
 }
@@ -109,6 +115,9 @@ pub fn load() -> Result<Config> {
     }
     if let Ok(value) = std::env::var("RUSTREAM_YTM_PROXY") {
         config.ytm_proxy = Some(value).filter(|value| !value.trim().is_empty());
+    }
+    if let Ok(value) = std::env::var("RUSTREAM_LYRICS_PROXY") {
+        config.lyrics_proxy = Some(value).filter(|value| !value.trim().is_empty());
     }
     Ok(config)
 }

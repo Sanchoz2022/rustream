@@ -79,37 +79,95 @@ pub async fn api_lyrics(
     .await
     .unwrap_or(None);
 
+    // YouTube Music tracks are not in `tracks`: take title/artist from the
+    // remembered listing so LRCLIB can be asked for the same lyrics. A cached
+    // download (or a matching local file) still provides a neighbouring .lrc.
+    let row = match row {
+        Some(row) => Some(row),
+        None => ytm_lyrics_row(&db, &track_id).await,
+    };
+    // A YouTube track has no file of its own: its text goes to the server
+    // store, not next to an evicted cache file.
+    let sidecar = row.is_some() && !crate::ytm::video_id(&track_id).is_some();
+
     let Some((file_path, title, artist, duration_ms)) = row else {
         return Json(json!({ "plain": null, "synced": [], "error": "track not found" }));
     };
 
+    let store = lyrics::store_dir(&config.db_path);
     let found = lyrics::resolve(
         &db,
-        &track_id,
-        std::path::Path::new(&file_path),
-        &artist,
-        &title,
-        duration_ms / 1000,
-        config.online_lyrics,
+        &lyrics::Lookup {
+            track_id: &track_id,
+            path: std::path::Path::new(&file_path),
+            artist: &artist,
+            title: &title,
+            duration_sec: duration_ms / 1000,
+            online: config.online_lyrics,
+            refresh,
+            store: Some(&store),
+            sidecar,
+            proxy: config.lyrics_proxy.as_deref(),
+        },
     )
     .await;
 
     match found {
-        Some(lyrics) => Json(json!({
+        lyrics::Outcome::Found(lyrics) => Json(json!({
             "title": title,
             "artist": artist,
             "plain": lyrics.plain,
             "synced": lyrics.synced,
-            "source": lyrics.source
+            "source": lyrics.source,
+            "saved": lyrics.saved
         })),
-        None => Json(json!({
+        lyrics::Outcome::NotFound => Json(json!({
             "title": title,
             "artist": artist,
             "plain": null,
             "synced": [],
-            "source": null
+            "source": null,
+            "error": "not_found"
+        })),
+        // The service answered with an error or a rate limit: the text may
+        // well exist, so the panel says "try again" instead of "not found".
+        lyrics::Outcome::Unavailable => Json(json!({
+            "title": title,
+            "artist": artist,
+            "plain": null,
+            "synced": [],
+            "source": null,
+            "error": "unavailable"
         })),
     }
+}
+
+/// Lyrics metadata for a YouTube Music id (`ytm-<video>`): title, artist and
+/// duration come from the remembered listing, and the path points at a cached
+/// download or an identical local file so a neighbouring `.lrc` still wins.
+pub(crate) async fn ytm_lyrics_row(
+    db: &sqlx::SqlitePool,
+    track_id: &str,
+) -> Option<(String, String, String, i64)> {
+    let video_id = crate::ytm::video_id(track_id)?;
+    let (title, artist, duration_ms, file_path): (String, String, i64, Option<String>) =
+        sqlx::query_as(
+            "SELECT title, artist, duration_ms, file_path FROM ytm_tracks
+             WHERE video_id = ? ORDER BY last_used_at DESC LIMIT 1",
+        )
+        .bind(video_id)
+        .fetch_optional(db)
+        .await
+        .ok()??;
+
+    let path = match file_path {
+        Some(path) => path,
+        None => crate::ytm::local_match(db, &title, &artist, duration_ms)
+            .await
+            .map(|local| local.path)
+            .unwrap_or_default(),
+    };
+    Some((path, title, artist, duration_ms))
 }
 
 pub async fn api_rescan(State(state): State<Arc<RwLock<AppState>>>) -> Json<Value> {
