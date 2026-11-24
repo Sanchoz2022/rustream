@@ -394,21 +394,25 @@ function plural(n, one, few, many) {
   return many;
 }
 
-/** Метка источника: YouTube-треки видно сразу, локальные — по формату. */
+/** Метка источника: YouTube-треки видно сразу, редкие форматы — тоже.
+ *  Обычный FLAC/MP3 не помечаем: бейдж на каждой строке — это шум. */
 function sourceBadge(track) {
   if (track?.source === 'ytm') {
     return `<span class="track-badge ytm" title="Источник: YouTube Music">YT</span>`;
   }
-  return `<span class="track-badge">${esc((track?.suffix || 'flac').toUpperCase())}</span>`;
+  const suffix = (track?.suffix || '').toLowerCase();
+  if (suffix && suffix !== 'flac' && suffix !== 'mp3') {
+    return `<span class="track-badge" title="Формат файла">${esc(suffix.toUpperCase())}</span>`;
+  }
+  return '';
 }
 
 function trackRow(track, index, { showAlbum = true, showCover = false, playlistId = null, rowAction = 'play-row', rowList = null } = {}) {
   const isPlaying = player.track?.id === track.id;
   const liked = state.favorites.has(track.id);
-  const number = track.track && track.track > 0 ? track.track : index + 1;
   return `<div class="track-row ${isPlaying ? 'playing' : ''} ${showCover ? 'has-cover' : ''}" data-action="${rowAction}" data-index="${index}" data-track-id="${esc(track.id)}" ${rowList ? `data-list="${rowList}"` : ''} tabindex="0">
     <div class="track-index">
-      <span class="track-num">${number}</span>
+      <span class="track-num">${index + 1}</span>
       <span class="track-eq"><i></i><i></i><i></i></span>
     </div>
     ${showCover ? `<span class="track-cover">${coverHtml(track.coverArt || track.albumId, { size: 80 })}</span>` : ''}
@@ -466,7 +470,7 @@ function setActiveNav(section) {
   });
 }
 
-async function route() {
+async function route({ keepScroll = false } = {}) {
   const { parts, params } = parseRoute();
   const section = parts[0] || 'home';
   if (section === 'register') {
@@ -479,7 +483,9 @@ async function route() {
   }
   const seq = ++state.renderSeq;
   setActiveNav(section);
-  $('#view').scrollTop = 0;
+  const view = $('#view');
+  const prevScroll = view.scrollTop;
+  view.scrollTop = 0;
 
   try {
     if (section === 'home') await renderHome(seq);
@@ -503,6 +509,9 @@ async function route() {
     if (handleAuthError(error)) return;
     if (seq === state.renderSeq) showError(error.message || 'Ошибка загрузки');
   }
+  // Точечные обновления (лайк на странице «Избранное») перерисовывают список,
+  // но не сбрасывают позицию скролла — страница не «мигает» переходом.
+  if (keepScroll && seq === state.renderSeq) view.scrollTop = prevScroll;
 }
 
 // ---------------------------------------------------------------------------
@@ -634,7 +643,7 @@ async function renderHome(seq) {
                 <small>${esc(current.artist || '')}${continueQueue ? ` · ${player.index + 1} из ${player.queue.length}` : ''}</small>
               </span>
               <button class="btn primary" data-action="toggle">${icon(player.paused ? 'play' : 'pause')} ${player.paused ? 'Продолжить' : 'Пауза'}</button>
-              <a class="btn ghost" href="#/live">${icon('queue')} Очередь</a>
+              <button class="btn ghost" data-action="open-queue">${icon('queue')} Очередь</button>
             </section>`
           : ''
       }
@@ -742,7 +751,7 @@ async function renderLive(seq) {
       <section class="live-hero">
         <div>
           <div class="eyebrow"><span class="live-dot"></span>${state.liveMode ? 'Эфир идёт' : 'Готов к запуску'}</div>
-          <h2>${state.liveMode ? 'Поток подбирает следующий трек' : 'Очередь, которая слушает вас'}</h2>
+          <h2>${state.liveMode ? 'Поток подбирает следующий трек' : 'Бесконечный эфир из вашей музыки'}</h2>
           <p class="muted">
             ${meStats.plays
               ? `Учтено ${meStats.plays} прослушиваний. Чем больше слушаете, тем точнее подбор.`
@@ -751,7 +760,6 @@ async function renderLive(seq) {
           <div class="live-tags">
             <span class="chip">Избранное</span>
             <span class="chip">Любимые артисты</span>
-            <span class="chip">Редкие треки</span>
             <span class="chip">Без повторов</span>
           </div>
         </div>
@@ -846,8 +854,8 @@ async function renderStats(seq) {
                   .map(
                     (genre) => `<div class="genre-row">
                       <span class="genre-name">${esc(genre.name)}</span>
-                      <span class="genre-bar"><i style="width:${Math.min(100, (genre.plays / (meStats.topGenres[0]?.plays || 1)) * 100)}%"></i></span>
-                      <span class="genre-plays">${genre.plays}</span>
+                      <span class="genre-bar"><i style="width:${Math.min(100, ((genre.plays || 0) / (meStats.topGenres[0]?.plays || 1)) * 100)}%"></i></span>
+                      <span class="genre-plays">${genre.plays || 0}</span>
                     </div>`,
                   )
                   .join('')}</div>`
@@ -1160,9 +1168,9 @@ async function renderSearch(seq, query) {
         }
 
         <section class="section">
-          <div class="section-head"><h2>Популярное</h2></div>
+          <div class="section-head"><h2>Популярные направления</h2></div>
           <div class="chip-row">
-            ${['Chiki The Maid', 'Intro', 'Poezd', 'FLAC', 'Аниме', 'Рок', 'Джаз']
+            ${['Рок', 'Поп', 'Джаз', 'Электроника', 'Хип-хоп', 'Метал', 'Классика', 'Саундтрек']
               .map((q) => `<button class="chip-btn" data-action="run-search" data-query="${esc(q)}">${esc(q)}</button>`)
               .join('')}
           </div>
@@ -1248,8 +1256,11 @@ async function setTrackRating(trackId, rating) {
       btn.classList.toggle('active', state.dislikes.has(trackId));
     });
     updatePlayerRating();
-    if (location.hash.startsWith('#/favorites')) route();
-    if (location.hash.startsWith('#/stats')) route();
+    // Списки, где состав зависит от лайка, перерисовываем на месте —
+    // без сброса скролла и без эффекта «переадресации».
+    if (location.hash.startsWith('#/favorites') || location.hash.startsWith('#/stats')) {
+      route({ keepScroll: true });
+    }
   } catch (error) {
     toast(error.message, 'error');
   }
@@ -1368,11 +1379,16 @@ async function createPlaylistFlow() {
 
 function showModal({ title, body, onMount }) {
   const rootEl = $('#modal-root');
+  // Шапка и контент живут внутри одной «карточки»: раньше head был соседним
+  // грид-ребёнком и висел без фона поверх страницы (на телефоне — поверх
+  // обложки в плеере).
   rootEl.innerHTML = `
     <div class="modal-backdrop" data-modal-action="close">
       <div class="modal" role="dialog" aria-modal="true">
-        <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-modal-action="close">${icon('close')}</button></div>
-        <div class="modal-body">${body}</div>
+        <div class="modal-card">
+          <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" data-modal-action="close">${icon('close')}</button></div>
+          <div class="modal-body">${body}</div>
+        </div>
       </div>
     </div>`;
   document.body.classList.add('modal-open');
@@ -1516,7 +1532,7 @@ function renderNowPlaying() {
         ${track ? `
           <span class="chip">${(track.suffix || 'flac').toUpperCase()}</span>
           <span class="chip">${track.bitRate ? `${track.bitRate} kbps` : 'lossless'}</span>
-          <span class="chip" id="np-buffer">буфер 0:00</span>
+          <span class="chip" id="np-buffer" hidden>в буфере 0:00</span>
         ` : ''}
       </div>
       <div class="np-controls">
@@ -1673,23 +1689,30 @@ function renderEqPanel(panel) {
 function renderQueuePanel(panel) {
   const queue = player.queue;
   panel.innerHTML = `
-    <div class="panel-title"><h3>Очередь</h3><span class="muted">${queue.length} ${plural(queue.length, 'трек', 'трека', 'треков')}</span></div>
+    <div class="panel-title">
+      <h3>Очередь</h3>
+      <span class="queue-head-meta">
+        <span class="muted">${queue.length} ${plural(queue.length, 'трек', 'трека', 'треков')}</span>
+        ${queue.length ? `<button class="text-link" data-action="clear-queue">Очистить</button>` : ''}
+      </span>
+    </div>
     ${
       queue.length
         ? `<div class="queue-list" id="queue-list">${queue
             .map(
               (track, index) => `
-              <button class="queue-row ${index === player.index ? 'active' : ''}" data-action="play-queue" data-index="${index}" data-track-id="${track.id}">
+              <div class="queue-row ${index === player.index ? 'active' : ''}" data-action="play-queue" data-index="${index}" data-track-id="${track.id}" role="button" tabindex="0">
                 <span class="queue-drag-handle">${icon('menu')}</span>
                 <span class="queue-cover">${coverHtml(track.coverArt || track.albumId, { size: 80 })}</span>
                 <span class="queue-main"><strong>${esc(track.title)}</strong><small>${esc(track.artist || '')}</small></span>
                 <span class="queue-time">${formatTime(track.duration)}</span>
-              </button>`,
+                <button class="icon-btn row-btn" data-action="remove-queue" data-index="${index}" title="Убрать из очереди">${icon('close')}</button>
+              </div>`,
             )
             .join('')}</div>`
         : emptyPanel('queue', 'Очередь пуста', 'Нажмите на трек или альбом, чтобы начать воспроизведение.')
     }`;
-  
+
   // Инициализация Sortable для drag-and-drop
   const queueList = $('#queue-list');
   if (queueList && queue.length > 0) {
@@ -1721,13 +1744,16 @@ function updateTrackUi() {
   const qualityFormat = $('#quality-format');
   const qualityDetail = $('#quality-detail');
 
+  // Пустая пилюля «Сейчас играет» в шапке — только шум: прячем без трека.
+  const npPill = $('#np-pill');
+  if (npPill) npPill.hidden = !track;
+
   if (!track) {
     title.textContent = 'Ничего не играет';
     artist.textContent = 'Выберите трек';
     $('.pb-cover').classList.remove('loaded');
     qualityFormat.textContent = '—';
     qualityDetail.textContent = '';
-    updateMediaSession(null);
     return;
   }
 
@@ -1748,47 +1774,6 @@ function updateTrackUi() {
     .filter(Boolean)
     .join(' · ');
   updatePlayerRating();
-  updateMediaSession(track);
-}
-
-function updateMediaSession(track) {
-  if (!('mediaSession' in navigator)) return;
-  
-  if (!track) {
-    navigator.mediaSession.metadata = null;
-    return;
-  }
-  
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title: track.title || 'Без названия',
-    artist: track.artist || 'Неизвестный артист',
-    album: track.album || '',
-    artwork: [
-      { src: api.coverUrl(track.coverArt || track.albumId, 96), sizes: '96x96', type: 'image/jpeg' },
-      { src: api.coverUrl(track.coverArt || track.albumId, 128), sizes: '128x128', type: 'image/jpeg' },
-      { src: api.coverUrl(track.coverArt || track.albumId, 256), sizes: '256x256', type: 'image/jpeg' },
-      { src: api.coverUrl(track.coverArt || track.albumId, 512), sizes: '512x512', type: 'image/jpeg' },
-    ],
-  });
-}
-
-// MediaSession handlers (один раз при загрузке)
-if ('mediaSession' in navigator) {
-  navigator.mediaSession.setActionHandler('play', () => player.play());
-  navigator.mediaSession.setActionHandler('pause', () => player.pause());
-  navigator.mediaSession.setActionHandler('previoustrack', () => player.previous());
-  navigator.mediaSession.setActionHandler('nexttrack', () => player.next());
-  navigator.mediaSession.setActionHandler('seekto', (details) => {
-    if (details.seekTime !== undefined) {
-      player.seekTo(details.seekTime);
-    }
-  });
-  navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-    player.seekBy(-(details.seekOffset || 10));
-  });
-  navigator.mediaSession.setActionHandler('seekforward', (details) => {
-    player.seekBy(details.seekOffset || 10);
-  });
 }
 
 function updateTimeUi() {
@@ -1818,21 +1803,17 @@ function updateBufferUi() {
   const npBufferFill = $('#np-seek-buffer');
   if (npBufferFill) npBufferFill.style.width = `${buffer.percent}%`;
 
+  // В плеере «в буфере» показываем только пока трек реально подгружается:
+  // после полной загрузки чип — лишний шум.
   const npBuffer = $('#np-buffer');
   if (npBuffer) {
-    npBuffer.textContent = `буфер ${formatTime(buffer.ahead)}`;
-    npBuffer.title = `Загружено ${formatBytes(player.estimatedBufferedBytes())}`;
-  }
-
-  const detail = $('#quality-detail');
-  if (detail && player.track) {
-    detail.textContent = [
-      player.track.bitRate ? `${player.track.bitRate} kbps` : null,
-      player.track.size ? formatBytes(player.track.size) : null,
-      `буфер ${formatTime(buffer.ahead)}`,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    if (buffer.percent >= 99.5 || !player.track) {
+      npBuffer.hidden = true;
+    } else {
+      npBuffer.hidden = false;
+      npBuffer.textContent = `в буфере ${formatTime(buffer.ahead)}`;
+      npBuffer.title = `Загружено ${formatBytes(player.estimatedBufferedBytes())}`;
+    }
   }
 }
 
@@ -2577,7 +2558,7 @@ async function openSettings() {
         }
         if (action === 'save-scrobbling') {
           // Две отдельные кнопки: не затираем Last.fm пустым полем и наоборот.
-          const scope = actionEl.dataset.scope || 'both';
+          const scope = button.dataset.scope || 'both';
           const body = {};
           if (scope !== 'lastfm') body.listenbrainzToken = $('#settings-listenbrainz', modal).value.trim();
           if (scope !== 'listenbrainz') body.lastfmSessionKey = $('#settings-lastfm-key', modal).value.trim();
@@ -2897,18 +2878,47 @@ async function renderYtm(seq) {
   state.ytmStatus = status;
 
   if (!status?.connected) {
+    // Форма подключения прямо здесь: переадресация в профиль — лишний шаг.
     $('#view').innerHTML = `
       <div class="page ytm-page">
         <header class="page-head">
           <div><span class="eyebrow">Источник</span><h1>YouTube Music</h1></div>
         </header>
-        <section class="section glass-card empty-state">
-          <span class="empty-icon">${icon('ytm')}</span>
-          <h2>Подключите свой аккаунт</h2>
-          <p class="muted">Поиск и лайки YouTube Music будут доступны только вам. Подключение занимает минуту.</p>
-          <a class="btn primary" href="#/profile">${icon('settings')} Перейти в профиль</a>
+        <section class="section glass-card">
+          <div class="section-head">
+            <div>
+              <h2>Подключите свой аккаунт</h2>
+              <p class="muted">Поиск и лайки YouTube Music будут доступны только вам. Подключение занимает минуту.</p>
+            </div>
+            <span class="status-chip">не подключено</span>
+          </div>
+          ${ytmCardHtml(status || {})}
         </section>
       </div>`;
+
+    const connectForm = $('#ytm-connect-form');
+    connectForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = $('#ytm-connect-submit');
+      const errorBox = $('#ytm-connect-error');
+      const cookies = $('#ytm-cookies').value.trim();
+      errorBox.textContent = '';
+      if (!cookies) {
+        errorBox.textContent = 'Вставьте cookies';
+        return;
+      }
+      button.disabled = true;
+      try {
+        await api.connectYtm(cookies);
+        toast('YouTube Music подключён');
+        state.ytmStatus = await api.getYtmStatus().catch(() => null);
+        route();
+      } catch (error) {
+        errorBox.textContent = error.message || 'Не удалось подключить';
+      } finally {
+        button.disabled = false;
+      }
+    });
     return;
   }
 
@@ -3306,16 +3316,6 @@ document.addEventListener('click', async (event) => {
     }
     return;
   }
-  if (action === 'resume') {
-    if (!player.track) {
-      if (state.currentTracks.length) await player.playTracks(state.currentTracks, 0);
-    } else {
-      player.clearRestored();
-      await player.toggle();
-    }
-    if (location.hash.startsWith('#/home')) route();
-    return;
-  }
   if (action === 'toggle') {
     if (!player.track && state.currentTracks.length) await player.playTracks(state.currentTracks, 0);
     else await player.toggle();
@@ -3345,6 +3345,18 @@ document.addEventListener('click', async (event) => {
   if (action === 'play-queue') {
     setLiveMode(false);
     await player.playAt(Number(actionEl.dataset.index));
+    return;
+  }
+  if (action === 'remove-queue') {
+    event.stopPropagation();
+    player.removeAt(Number(actionEl.dataset.index));
+    renderQueuePanel($('#np-panel'));
+    return;
+  }
+  if (action === 'clear-queue') {
+    player.clearQueue();
+    renderQueuePanel($('#np-panel'));
+    toast('Очередь очищена');
     return;
   }
   if (action === 'new-playlist') {
@@ -3448,13 +3460,13 @@ document.addEventListener('keydown', (event) => {
       event.preventDefault();
       toggleLike(player.track.id);
     }
-    // N → следующий трек
-    if (key === 'n') {
+    // N → следующий трек, P → предыдущий: без запущенной очереди они
+    // бессмысленны, поэтому молча игнорируем их.
+    if (key === 'n' && player.track) {
       event.preventDefault();
       player.next();
     }
-    // P → предыдущий трек
-    if (key === 'p') {
+    if (key === 'p' && player.track) {
       event.preventDefault();
       player.previous();
     }
@@ -3647,15 +3659,6 @@ document.addEventListener('keydown', (event) => {
 
 // Search
 const searchInput = $('#search-input');
-let searchTimer;
-searchInput.addEventListener('input', () => {
-  clearTimeout(searchTimer);
-  const query = searchInput.value.trim();
-  if (query.length === 0) return;
-  searchTimer = setTimeout(() => {
-    if (query.length >= 2) location.hash = `#/search?q=${encodeURIComponent(query)}`;
-  }, 350);
-});
 searchInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     const query = searchInput.value.trim();

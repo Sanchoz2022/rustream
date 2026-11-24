@@ -408,6 +408,23 @@ export class Player extends EventTarget {
     this.queue.splice(index, 1);
     if (index < this.index) this.index -= 1;
     this._storeQueue();
+    this._emit('queue');
+  }
+
+  /** Полностью очистить очередь и остановить воспроизведение. */
+  clearQueue() {
+    this._finalizePlay(false);
+    this.queue = [];
+    this.index = -1;
+    this.track = null;
+    this._restoredPause = false;
+    this.audio.pause();
+    this.audio.removeAttribute('src');
+    this.audio.load();
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+    this._storeQueue();
+    this._emit('track');
+    this._emit('state');
   }
 
   seekBy(seconds) {
@@ -679,6 +696,17 @@ export class Player extends EventTarget {
 
   _updateMediaSession(track) {
     if (!('mediaSession' in navigator)) return;
+    // Управление не только play/pause: перемотка с наушников и системного
+    // медиа-меню должна работать так же, как с клавиатуры.
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (details.seekTime !== undefined) this.seekToSeconds(details.seekTime);
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      this.seekBy(-(details.seekOffset || 10));
+    });
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      this.seekBy(details.seekOffset || 10);
+    });
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || '',
       artist: track.artist || '',

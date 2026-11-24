@@ -320,7 +320,7 @@ export function register({ invite, username, password, displayName }) {
 }
 
 export const inviteLink = (code) =>
-  `${location.origin}/static/index.html#/register?invite=${encodeURIComponent(code)}`;
+  `${location.origin}/#/register?invite=${encodeURIComponent(code)}`;
 
 // --- YouTube Music -------------------------------------------------------------
 
