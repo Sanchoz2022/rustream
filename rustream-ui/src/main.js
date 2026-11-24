@@ -1389,6 +1389,84 @@ function closeModal() {
 }
 
 // ---------------------------------------------------------------------------
+// Sleep timer & hotkeys help
+// ---------------------------------------------------------------------------
+
+/** Человекочитаемый остаток таймера сна для подсказок и тостов. */
+function sleepRemainingLabel() {
+  if (player.sleepMode === 'track') return 'до конца трека';
+  if (player.sleepMode === 'timer') {
+    const total = Math.ceil(player.sleepRemainingMs / 1000);
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `через ${mins}:${String(secs).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+/** Подсветить кнопку таймера сна и показать остаток в подсказке. */
+function updateSleepUi() {
+  const active = !!player.sleepMode;
+  $$('[data-action="sleep"]').forEach((button) => {
+    button.classList.toggle('active', active);
+    button.title = active ? `Таймер сна ${sleepRemainingLabel()}` : 'Таймер сна';
+  });
+}
+
+function openSleepModal() {
+  const minutes = [15, 30, 45, 60];
+  showModal({
+    title: 'Таймер сна',
+    body: `
+      <p class="muted">Музыка плавно затихнет и встанет на паузу${player.sleepMode ? `. Сейчас: <strong>${sleepRemainingLabel()}</strong>` : ''}.</p>
+      <div class="modal-actions sleep-actions">
+        ${minutes.map((value) => `<button class="btn ghost" data-sleep="${value}">${value} минут</button>`).join('')}
+        <button class="btn ghost" data-sleep="track">Дослушать текущий трек</button>
+        ${player.sleepMode ? '<button class="btn primary" data-sleep="off">Выключить таймер</button>' : ''}
+      </div>`,
+    onMount: (modal) => {
+      modal.addEventListener('click', (event) => {
+        const choice = event.target.closest('[data-sleep]')?.dataset.sleep;
+        if (!choice) return;
+        if (choice === 'off') {
+          player.cancelSleepTimer();
+          toast('Таймер сна выключен');
+        } else if (choice === 'track') {
+          player.stopAfterTrack();
+          toast('Остановлюсь после текущего трека');
+        } else {
+          player.startSleepTimer(Number(choice));
+          toast(`Таймер сна на ${choice} минут`);
+        }
+        closeModal();
+        updateSleepUi();
+      });
+    },
+  });
+}
+
+function openHotkeysModal() {
+  const rows = [
+    ['Space', 'Играть / пауза'],
+    ['N', 'Следующий трек'],
+    ['P', 'Предыдущий трек'],
+    ['S', 'Перемешать'],
+    ['R', 'Повтор: выкл → все → один'],
+    ['M', 'Звук вкл / выкл'],
+    ['L', 'Лайк текущему треку'],
+    ['Shift + ← / →', 'Перемотка на 5 секунд'],
+    ['Ctrl + K', 'Поиск'],
+    ['Esc', 'Закрыть окно / плеер'],
+  ];
+  showModal({
+    title: 'Горячие клавиши',
+    body: `<div class="hotkeys">${rows
+      .map(([keys, label]) => `<div class="hotkey-row"><kbd>${keys}</kbd><span>${esc(label)}</span></div>`)
+      .join('')}</div>`,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Now playing panel
 // ---------------------------------------------------------------------------
 
@@ -1453,6 +1531,7 @@ function renderNowPlaying() {
         <button class="icon-btn dislike ${track && state.dislikes.has(track.id) ? 'active' : ''}" data-action="dislike-current" title="Не нравится">${icon('thumbDown')}</button>
         <button class="icon-btn" data-action="add-to-playlist" data-id="${track?.id || ''}" ${track ? '' : 'disabled'} title="В плейлист">${icon('add')}</button>
         <button class="icon-btn" data-action="jump-album" ${track?.albumId ? '' : 'disabled'} title="К альбому">${icon('album')}</button>
+        <button class="icon-btn" data-action="sleep" title="Таймер сна">${icon('clock')}</button>
       </div>
     </div>`;
 
@@ -1697,7 +1776,7 @@ function updateMediaSession(track) {
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', () => player.play());
   navigator.mediaSession.setActionHandler('pause', () => player.pause());
-  navigator.mediaSession.setActionHandler('previoustrack', () => player.prev());
+  navigator.mediaSession.setActionHandler('previoustrack', () => player.previous());
   navigator.mediaSession.setActionHandler('nexttrack', () => player.next());
   navigator.mediaSession.setActionHandler('seekto', (details) => {
     if (details.seekTime !== undefined) {
@@ -1759,7 +1838,9 @@ function updateBufferUi() {
 
 function updatePlayState() {
   const playing = !player.paused && !!player.track;
-  $('#play-btn').innerHTML = icon(playing ? 'pause' : 'play');
+  const playBtn = $('#play-btn');
+  playBtn.innerHTML = icon(playing ? 'pause' : 'play');
+  playBtn.title = playing ? 'Пауза' : 'Играть';
   $('#pb-cover').classList.toggle('playing', playing);
   const npPlay = $('.np-controls [data-action="toggle"]');
   if (npPlay) {
@@ -3244,6 +3325,10 @@ document.addEventListener('click', async (event) => {
   if (action === 'next') return player.next();
   if (action === 'shuffle') return player.toggleShuffle();
   if (action === 'repeat') return player.cycleRepeat();
+  if (action === 'sleep') {
+    openSleepModal();
+    return;
+  }
   if (action === 'mute') return player.toggleMute();
   if (action === 'nowplaying') return openNowPlaying(state.npTab);
   if (action === 'open-lyrics') return openNowPlaying('lyrics');
@@ -3331,6 +3416,18 @@ $('#volume').addEventListener('input', (event) => {
   updateVolumeUi();
 });
 
+// Громкость колёсиком мыши над плеер-баром — без точного наведения на слайдер.
+$('#playerbar').addEventListener(
+  'wheel',
+  (event) => {
+    if (!player.track) return;
+    event.preventDefault();
+    player.setVolume(player.volumePercent + (event.deltaY < 0 ? 5 : -5));
+    updateVolumeUi();
+  },
+  { passive: false },
+);
+
 // Keyboard
 document.addEventListener('keydown', (event) => {
   const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
@@ -3342,37 +3439,44 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowRight' && !typing && event.shiftKey) player.seekBy(5);
   if (event.key === 'ArrowLeft' && !typing && event.shiftKey) player.seekBy(-5);
   
-  // Новые хоткеи
-  if (!typing) {
+  // Новые хоткеи. Буквы работают только без модификаторов: Ctrl+S, Ctrl+R,
+  // Ctrl+P и прочие браузерные сочетания не должны дёргать плеер.
+  if (!typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const key = event.key.toLowerCase();
     // L → лайк текущего трека
-    if (event.key.toLowerCase() === 'l' && player.track) {
+    if (key === 'l' && player.track) {
       event.preventDefault();
       toggleLike(player.track.id);
     }
     // N → следующий трек
-    if (event.key.toLowerCase() === 'n') {
+    if (key === 'n') {
       event.preventDefault();
       player.next();
     }
-    // P → предыдущий трек (только если не Ctrl+P для печати)
-    if (event.key.toLowerCase() === 'p' && !event.ctrlKey && !event.metaKey) {
+    // P → предыдущий трек
+    if (key === 'p') {
       event.preventDefault();
-      player.prev();
+      player.previous();
     }
     // M → mute/unmute
-    if (event.key.toLowerCase() === 'm') {
+    if (key === 'm') {
       event.preventDefault();
       player.toggleMute();
     }
     // S → shuffle
-    if (event.key.toLowerCase() === 's') {
+    if (key === 's') {
       event.preventDefault();
       player.toggleShuffle();
     }
     // R → repeat
-    if (event.key.toLowerCase() === 'r') {
+    if (key === 'r') {
       event.preventDefault();
-      player.toggleRepeat();
+      player.cycleRepeat();
+    }
+    // ? → справка по горячим клавишам
+    if (event.key === '?') {
+      event.preventDefault();
+      openHotkeysModal();
     }
   }
   
@@ -3596,6 +3700,7 @@ player.addEventListener('buffer', updateBufferUi);
 player.addEventListener('state', updatePlayState);
 player.addEventListener('mode', updateModeUi);
 player.addEventListener('volume', updateVolumeUi);
+player.addEventListener('sleep', updateSleepUi);
 player.addEventListener('eq', () => {
   if (state.npTab === 'eq' && state.npOpen) renderEqPanel($('#np-panel'));
 });
@@ -3699,4 +3804,5 @@ updateVolumeUi();
 updateModeUi();
 updatePlayState();
 updateTimeUi();
+updateSleepUi();
 bootstrap();

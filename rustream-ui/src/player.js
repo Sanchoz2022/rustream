@@ -18,6 +18,9 @@ const STORAGE_MODE = 'rustream.mode';
 const STORAGE_QUEUE = 'rustream.playback.queue';
 const STORAGE_POSITION = 'rustream.playback.position';
 
+// Сколько длится плавное затухание перед паузой таймера сна.
+const SLEEP_FADE_MS = 10_000;
+
 function loadJson(key, fallback) {
   try {
     const value = JSON.parse(localStorage.getItem(key));
@@ -61,6 +64,13 @@ export class Player extends EventTarget {
     this.sourceNode = null;
     this._lastPositionWrite = 0;
     this._restoredPause = false;
+
+    // Таймер сна: 'timer' — пауза через N минут, 'track' — после трека.
+    this.sleepMode = null;
+    this.sleepEndsAt = null;
+    this.sleepStopAfterTrack = false;
+    this.sleepTimer = null;
+    this.sleepTick = null;
 
     this._bindAudio();
     window.addEventListener('pagehide', () => this._storePosition(true));
@@ -304,6 +314,12 @@ export class Player extends EventTarget {
 
   async _onEnded() {
     this._finalizePlay(true);
+    // «Дослушать трек и уснуть»: без перехода к следующему.
+    if (this.sleepStopAfterTrack) {
+      this.cancelSleepTimer();
+      this._emit('state');
+      return;
+    }
     if (this.repeat === 'one') {
       this.audio.currentTime = 0;
       this._beginPlay(this.track);
@@ -413,6 +429,68 @@ export class Player extends EventTarget {
   toggleMute() {
     this.audio.muted = !this.audio.muted;
     this._emit('volume');
+  }
+
+  // --- Таймер сна ---------------------------------------------------------
+
+  /** Пауза через N минут: звук плавно затухает за последние 10 секунд. */
+  startSleepTimer(minutes) {
+    this.cancelSleepTimer(true);
+    this.sleepMode = 'timer';
+    this.sleepEndsAt = Date.now() + Math.max(1, Math.round(minutes)) * 60_000;
+    const delay = Math.max(0, this.sleepEndsAt - Date.now() - SLEEP_FADE_MS);
+    this.sleepTimer = setTimeout(() => this._sleepFadeOut(), delay);
+    // Тикаем, чтобы UI мог обновлять обратный отсчёт в подсказке кнопки.
+    this.sleepTick = setInterval(() => this._emit('sleep'), 15_000);
+    this._emit('sleep');
+  }
+
+  /** Дослушать текущий трек и остановиться, не переходя к следующему. */
+  stopAfterTrack() {
+    this.cancelSleepTimer(true);
+    this.sleepMode = 'track';
+    this.sleepStopAfterTrack = true;
+    this._emit('sleep');
+  }
+
+  cancelSleepTimer(silent = false) {
+    clearTimeout(this.sleepTimer);
+    clearInterval(this.sleepTick);
+    this.sleepTimer = null;
+    this.sleepTick = null;
+    this.sleepEndsAt = null;
+    this.sleepMode = null;
+    this.sleepStopAfterTrack = false;
+    if (!silent) this._emit('sleep');
+  }
+
+  get sleepRemainingMs() {
+    if (this.sleepMode !== 'timer' || !this.sleepEndsAt) return 0;
+    return Math.max(0, this.sleepEndsAt - Date.now());
+  }
+
+  /** Затухание громкости до нуля, пауза и возврат исходной громкости. */
+  _sleepFadeOut() {
+    clearTimeout(this.sleepTimer);
+    clearInterval(this.sleepTick);
+    this.sleepTimer = null;
+    this.sleepTick = null;
+    const steps = 20;
+    const startVolume = this.audio.volume;
+    let step = 0;
+    const fade = setInterval(() => {
+      step += 1;
+      if (step < steps) {
+        this.audio.volume = Math.max(0, startVolume * (1 - step / steps));
+        return;
+      }
+      clearInterval(fade);
+      this.audio.pause();
+      this.audio.volume = startVolume;
+      this.sleepMode = null;
+      this.sleepEndsAt = null;
+      this._emit('sleep');
+    }, SLEEP_FADE_MS / steps);
   }
 
   get currentTime() {
