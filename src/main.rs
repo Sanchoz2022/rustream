@@ -110,6 +110,8 @@ async fn main() -> Result<()> {
         .route("/favicon.ico", get(web::serve_favicon))
         .route("/static", get(web::serve_static))
         .route("/static/*path", get(web::serve_static))
+        .route("/assets", get(web::serve_static))
+        .route("/assets/*path", get(web::serve_static))
         .route("/stream/:track_id", get(api::playback::stream_route))
         .nest("/rest", subsonic::routes(state.clone()))
         .merge(api::public_routes())

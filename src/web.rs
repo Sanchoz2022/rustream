@@ -42,7 +42,10 @@ fn mime_for(path: &Path) -> &'static str {
 /// Хэшированные ассеты Vite (`index-<hash>.js`) можно кэшировать навсегда,
 /// сам `index.html` — нельзя, иначе браузер залипнет на старой сборке.
 fn cache_control(path: &Path) -> &'static str {
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
     if name == "index.html" {
         "no-cache"
     } else if path

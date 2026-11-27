@@ -91,16 +91,27 @@ root.innerHTML = `
 
   <div class="shell">
     <nav class="nav" aria-label="Разделы">
-      <a href="#/home" data-nav="home" class="nav-item"><span class="nav-icon">${icon('home')}</span><span class="nav-label">Главная</span></a>
-      <a href="#/live" data-nav="live" class="nav-item"><span class="nav-icon">${icon('radio')}</span><span class="nav-label">Live</span></a>
-      <a href="#/ytm" data-nav="ytm" class="nav-item"><span class="nav-icon">${icon('ytm')}</span><span class="nav-label">YouTube</span></a>
-      <a href="#/artists" data-nav="artists" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Артисты</span></a>
-      <a href="#/albums" data-nav="albums" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Альбомы</span></a>
-      <a href="#/tracks" data-nav="tracks" class="nav-item"><span class="nav-icon">${icon('music')}</span><span class="nav-label">Треки</span></a>
-      <a href="#/stats" data-nav="stats" class="nav-item"><span class="nav-icon">${icon('chart')}</span><span class="nav-label">Статистика</span></a>
-      <a href="#/playlists" data-nav="playlists" class="nav-item"><span class="nav-icon">${icon('playlist')}</span><span class="nav-label">Плейлисты</span></a>
-      <a href="#/favorites" data-nav="favorites" class="nav-item"><span class="nav-icon">${icon('heart')}</span><span class="nav-label">Избранное</span></a>
-      <a href="#/profile" data-nav="profile" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Профиль</span></a>
+      <div class="nav-group">
+        <div class="nav-group-label">Слушать</div>
+        <a href="#/home" data-nav="home" class="nav-item"><span class="nav-icon">${icon('home')}</span><span class="nav-label">Главная</span></a>
+        <a href="#/search" data-nav="search" class="nav-item"><span class="nav-icon">${icon('search')}</span><span class="nav-label">Поиск</span></a>
+        <a href="#/live" data-nav="live" class="nav-item"><span class="nav-icon">${icon('radio')}</span><span class="nav-label">Live</span></a>
+        <a href="#/ytm" data-nav="ytm" class="nav-item"><span class="nav-icon">${icon('ytm')}</span><span class="nav-label">YouTube Music</span></a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Медиатека</div>
+        <a href="#/library" data-nav="library" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Обзор</span></a>
+        <a href="#/artists" data-nav="artists" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Артисты</span></a>
+        <a href="#/albums" data-nav="albums" class="nav-item"><span class="nav-icon">${icon('album')}</span><span class="nav-label">Альбомы</span></a>
+        <a href="#/tracks" data-nav="tracks" class="nav-item"><span class="nav-icon">${icon('music')}</span><span class="nav-label">Треки</span></a>
+        <a href="#/playlists" data-nav="playlists" class="nav-item"><span class="nav-icon">${icon('playlist')}</span><span class="nav-label">Плейлисты</span></a>
+        <a href="#/favorites" data-nav="favorites" class="nav-item"><span class="nav-icon">${icon('heart')}</span><span class="nav-label">Избранное</span></a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Вы</div>
+        <a href="#/stats" data-nav="stats" class="nav-item"><span class="nav-icon">${icon('chart')}</span><span class="nav-label">Статистика</span></a>
+        <a href="#/profile" data-nav="profile" class="nav-item"><span class="nav-icon">${icon('person')}</span><span class="nav-label">Профиль</span></a>
+      </div>
       <div class="nav-spacer"></div>
       <div class="nav-hint">
         <span class="dot"></span>
@@ -439,6 +450,9 @@ function trackList(tracks, options = {}) {
 // Navigation
 // ---------------------------------------------------------------------------
 
+const HOME_HASH = '#/home';
+const DEFAULT_TITLE = 'Rustream — твоя музыка';
+
 function parseRoute() {
   const raw = location.hash.replace(/^#/, '') || '/home';
   const [path, queryString = ''] = raw.split('?');
@@ -449,7 +463,55 @@ function parseRoute() {
 // Detail pages highlight the section they belong to.
 const NAV_ALIAS = { artist: 'artists', album: 'albums', playlist: 'playlists' };
 // Everything the mobile "Медиатека" tab covers.
-const LIBRARY_SECTIONS = new Set(['artists', 'albums', 'tracks', 'playlists', 'favorites', 'stats']);
+const LIBRARY_SECTIONS = new Set([
+  'library',
+  'artists',
+  'albums',
+  'tracks',
+  'playlists',
+  'favorites',
+  'stats',
+]);
+
+const ROUTE_ALIASES = { index: 'home', yt: 'ytm', favourite: 'favorites', song: 'tracks' };
+
+const SECTION_TITLES = {
+  home: 'Главная',
+  live: 'Live',
+  search: 'Поиск',
+  library: 'Медиатека',
+  artists: 'Артисты',
+  albums: 'Альбомы',
+  tracks: 'Треки',
+  playlists: 'Плейлисты',
+  favorites: 'Избранное',
+  stats: 'Статистика',
+  profile: 'Профиль',
+  ytm: 'YouTube Music',
+};
+
+const SIMPLE_ROUTES = {
+  home: renderHome,
+  live: renderLive,
+  stats: renderStats,
+  artists: renderArtists,
+  albums: renderAlbums,
+  tracks: renderTracks,
+  playlists: renderPlaylists,
+  favorites: renderFavorites,
+  library: renderLibrary,
+  profile: renderProfile,
+  ytm: renderYtm,
+};
+
+const DETAIL_ROUTES = { artist: renderArtist, album: renderAlbum, playlist: renderPlaylist };
+
+const DETAIL_TITLES = { artist: 'Артист', album: 'Альбом', playlist: 'Плейлист' };
+
+function replaceHash(hash) {
+  if (location.hash === hash) return;
+  history.replaceState(null, '', hash);
+}
 
 function setActiveNav(section) {
   const active = NAV_ALIAS[section] || section;
@@ -460,44 +522,87 @@ function setActiveNav(section) {
     const tab = item.dataset.tab;
     const on =
       tab === active ||
-      (tab === 'library' && (active === 'library' || LIBRARY_SECTIONS.has(active))) ||
+      (tab === 'library' && LIBRARY_SECTIONS.has(active)) ||
       (tab === 'search' && active === 'search');
     item.classList.toggle('active', on);
   });
 }
 
+function setDocumentTitle(section) {
+  const title = DETAIL_TITLES[section] || SECTION_TITLES[section];
+  document.title = title ? `${title} — Rustream` : DEFAULT_TITLE;
+}
+
+function renderNotFound(message = '') {
+  setActiveNav('');
+  document.title = `Страница не найдена — Rustream`;
+  $('#view').innerHTML = `
+    <div class="page">
+      <div class="empty-state notfound">
+        <span class="empty-icon">${icon('search')}</span>
+        <div class="eyebrow">404</div>
+        <h2>Такой страницы нет</h2>
+        <p>${esc(message || 'Возможно, ссылка устарела или в адресе опечатка.')}</p>
+        <div class="notfound-links">
+          <a class="btn primary" href="${HOME_HASH}">${icon('home')} На главную</a>
+          <a class="btn tonal" href="#/library">${icon('album')} Медиатека</a>
+          <a class="btn glass" href="#/search">${icon('search')} Поиск</a>
+        </div>
+      </div>
+    </div>`;
+}
+
 async function route() {
   const { parts, params } = parseRoute();
-  const section = parts[0] || 'home';
-  if (section === 'register') {
-    showRegister(params.get('invite') || '');
-    return;
+  let section = parts[0] || 'home';
+
+  if (ROUTE_ALIASES[section]) {
+    section = ROUTE_ALIASES[section];
+    replaceHash(`#/${section}`);
   }
+
+  if (section === 'register') {
+    if (state.me) {
+      replaceHash(HOME_HASH);
+      section = 'home';
+    } else {
+      document.title = 'Регистрация — Rustream';
+      showRegister(params.get('invite') || '');
+      return;
+    }
+  }
+
+  if (section === 'login') {
+    if (state.me) {
+      replaceHash(HOME_HASH);
+      section = 'home';
+    } else {
+      document.title = 'Вход — Rustream';
+      showLogin();
+      return;
+    }
+  }
+
   if (!state.me) {
     showLogin();
     return;
   }
+
+  if (parts.length > 2 || (DETAIL_ROUTES[section] && !parts[1])) {
+    renderNotFound(parts.length > 2 ? 'Лишние части в адресе страницы.' : 'В ссылке не указан идентификатор.');
+    return;
+  }
+
   const seq = ++state.renderSeq;
   setActiveNav(section);
+  setDocumentTitle(section);
   $('#view').scrollTop = 0;
 
   try {
-    if (section === 'home') await renderHome(seq);
-    else if (section === 'live') await renderLive(seq);
-    else if (section === 'stats') await renderStats(seq);
-    else if (section === 'artists') await renderArtists(seq);
-    else if (section === 'artist') await renderArtist(seq, parts[1]);
-    else if (section === 'albums') await renderAlbums(seq);
-    else if (section === 'album') await renderAlbum(seq, parts[1]);
-    else if (section === 'tracks') await renderTracks(seq);
-    else if (section === 'playlists') await renderPlaylists(seq);
-    else if (section === 'playlist') await renderPlaylist(seq, parts[1]);
-    else if (section === 'favorites') await renderFavorites(seq);
+    if (SIMPLE_ROUTES[section]) await SIMPLE_ROUTES[section](seq, params);
     else if (section === 'search') await renderSearch(seq, params.get('q') || '');
-    else if (section === 'library') await renderLibrary(seq);
-    else if (section === 'profile') await renderProfile(seq);
-    else if (section === 'ytm') await renderYtm(seq);
-    else await renderHome(seq);
+    else if (DETAIL_ROUTES[section]) await DETAIL_ROUTES[section](seq, parts[1]);
+    else renderNotFound(`Раздел «${section}» не существует.`);
   } catch (error) {
     console.error(error);
     if (handleAuthError(error)) return;
@@ -2699,15 +2804,85 @@ async function renderLibrary(seq) {
     </div>`;
 }
 
-async function renderProfile(seq) {
+const PROFILE_TABS = [
+  { id: 'account', label: 'Аккаунт', icon: 'person' },
+  { id: 'design', label: 'Оформление', icon: 'palette' },
+  { id: 'ytm', label: 'YouTube Music', icon: 'ytm' },
+  { id: 'invites', label: 'Приглашения', icon: 'ticket', admin: true },
+];
+
+function profileTabsHtml(active, isAdmin) {
+  const tabs = PROFILE_TABS.filter((tab) => !tab.admin || isAdmin);
+  return `<nav class="subnav" aria-label="Разделы профиля">
+    ${tabs
+      .map(
+        (tab) => `<a class="subnav-item ${tab.id === active ? 'active' : ''}"
+          href="#/profile?tab=${tab.id}">${icon(tab.icon)} ${tab.label}</a>`,
+      )
+      .join('')}
+  </nav>`;
+}
+
+async function renderProfile(seq, params = new URLSearchParams()) {
   showLoading();
   const isAdmin = !!state.me?.isAdmin;
+  const tabs = PROFILE_TABS.filter((tab) => !tab.admin || isAdmin);
+  const requested = params.get('tab') || 'account';
+  const tab = tabs.some((item) => item.id === requested) ? requested : 'account';
   const [ytmStatus, invites] = await Promise.all([
-    api.getYtmStatus().catch(() => ({ connected: false, account: null })),
-    isAdmin ? api.listInvites().catch(() => []) : Promise.resolve([]),
+    tab === 'ytm' ? api.getYtmStatus().catch(() => ({ connected: false, account: null })) : Promise.resolve(state.ytmStatus),
+    tab === 'invites' && isAdmin ? api.listInvites().catch(() => []) : Promise.resolve([]),
   ]);
   if (seq !== state.renderSeq) return;
-  state.ytmStatus = ytmStatus;
+  if (tab === 'ytm') state.ytmStatus = ytmStatus;
+
+  const accountCard = `
+    <section class="section glass-card">
+      <div class="section-head">
+        <div>
+          <h2>${icon('person')} Учётная запись</h2>
+          <p class="muted">Данные профиля, пароль и выход с текущего устройства.</p>
+        </div>
+      </div>
+      <dl class="settings-list">
+        <div class="settings-row"><dt>Имя</dt><dd>${esc(displayName())}</dd></div>
+        <div class="settings-row"><dt>Логин</dt><dd>@${esc(state.me?.username || '')}</dd></div>
+        <div class="settings-row"><dt>Роль</dt><dd>${isAdmin ? 'администратор' : 'слушатель'}</dd></div>
+      </dl>
+      <div class="card-actions">
+        <button class="btn primary" data-action="open-settings">${icon('settings')} Изменить данные</button>
+        <button class="btn ghost danger" data-action="logout">${icon('logout')} Выйти</button>
+      </div>
+    </section>`;
+
+  const designCard = `
+    <section class="section glass-card">
+      <h2>${icon('palette')} Тема</h2>
+      <p class="muted small">Тема сохраняется в аккаунте и применяется на всех устройствах.</p>
+      ${themePickerHtml()}
+    </section>
+    <section class="section glass-card">
+      <h2>${icon('expand')} Плотность</h2>
+      <p class="muted small">Сколько строк и обложек помещается на экране.</p>
+      <div class="theme-mode-picker">
+        ${DENSITIES.map(
+          (item) =>
+            `<button class="mode-btn ${(state.density || 'default') === item.id ? 'active' : ''}" data-action="density" data-value="${item.id}">${item.name}</button>`,
+        ).join('')}
+      </div>
+    </section>`;
+
+  const ytmCard = `
+    <section class="section glass-card">
+      <div class="section-head">
+        <div>
+          <h2>${icon('ytm')} YouTube Music</h2>
+          <p class="muted">Cookies хранятся зашифрованными и используются только для вашего профиля: поиск, лайки и прослушивание.</p>
+        </div>
+        <span class="status-chip ${ytmStatus?.connected ? 'on' : ''}">${ytmStatus?.connected ? 'подключено' : 'не подключено'}</span>
+      </div>
+      ${ytmCardHtml(ytmStatus || { connected: false, account: null })}
+    </section>`;
 
   $('#view').innerHTML = `
     <div class="page profile-page">
@@ -2715,45 +2890,19 @@ async function renderProfile(seq) {
         <div class="profile-identity">
           ${avatarHtml(displayName(), 'user-avatar xl')}
           <div>
+            <span class="eyebrow">Профиль</span>
             <h1>${esc(displayName())}</h1>
             <p class="muted">@${esc(state.me?.username || '')}${isAdmin ? ' · администратор' : ''}</p>
           </div>
         </div>
-        <div class="head-actions">
-          <button class="btn glass" data-action="open-settings">${icon('settings')} Настройки</button>
-          <button class="btn ghost danger" data-action="logout">${icon('logout')} Выйти</button>
-        </div>
       </header>
 
-      <section class="section glass-card">
-        <div class="section-head">
-          <div>
-            <h2>${icon('ytm')} YouTube Music</h2>
-            <p class="muted">Cookies хранятся зашифрованными и используются только для вашего профиля: поиск, лайки и прослушивание.</p>
-          </div>
-          <span class="status-chip ${ytmStatus.connected ? 'on' : ''}">${ytmStatus.connected ? 'подключено' : 'не подключено'}</span>
-        </div>
-        ${ytmCardHtml(ytmStatus)}
-      </section>
+      ${profileTabsHtml(tab, isAdmin)}
 
-      <section class="section glass-card">
-        <h2>${icon('palette')} Оформление</h2>
-        <p class="muted small">Тема сохраняется в аккаунте и применяется на всех устройствах.</p>
-        ${themePickerHtml()}
-      </section>
-
-      <section class="section glass-card">
-        <h2>${icon('expand')} Плотность</h2>
-        <p class="muted small">Сколько строк и обложек помещается на экране.</p>
-        <div class="theme-mode-picker">
-          ${DENSITIES.map(
-            (item) =>
-              `<button class="mode-btn ${(state.density || 'default') === item.id ? 'active' : ''}" data-action="density" data-value="${item.id}">${item.name}</button>`,
-          ).join('')}
-        </div>
-      </section>
-
-      ${isAdmin ? invitesHtml(invites) : ''}
+      ${tab === 'account' ? accountCard : ''}
+      ${tab === 'design' ? designCard : ''}
+      ${tab === 'ytm' ? ytmCard : ''}
+      ${tab === 'invites' && isAdmin ? invitesHtml(invites) : ''}
     </div>`;
 
   const connectForm = $('#ytm-connect-form');
@@ -2825,7 +2974,7 @@ async function renderYtm(seq) {
           <span class="empty-icon">${icon('ytm')}</span>
           <h2>Подключите свой аккаунт</h2>
           <p class="muted">Поиск и лайки YouTube Music будут доступны только вам. Подключение занимает минуту.</p>
-          <a class="btn primary" href="#/profile">${icon('settings')} Перейти в профиль</a>
+          <a class="btn primary" href="#/profile?tab=ytm">${icon('settings')} Перейти в профиль</a>
         </section>
       </div>`;
     return;
@@ -3671,14 +3820,15 @@ $('#login-form').addEventListener('submit', async (event) => {
   const button = $('#login-submit');
   const errorBox = $('#login-error');
   errorBox.textContent = '';
-  button.disabled = true;
+  if (button.getAttribute('aria-busy') === 'true') return;
+  button.setAttribute('aria-busy', 'true');
   try {
     await api.login($('#login-username').value.trim(), $('#login-password').value);
     await bootstrap();
   } catch (error) {
     errorBox.textContent = error.message || 'Не удалось войти';
   } finally {
-    button.disabled = false;
+    button.removeAttribute('aria-busy');
   }
 });
 

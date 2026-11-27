@@ -292,7 +292,8 @@ pub async fn history(db: &SqlitePool, user_id: &str, limit: usize) -> Result<Vec
         .collect())
 }
 
-fn song_json(song: &Song) -> Value {    let id = format!("{ID_PREFIX}{}", song.video_id);
+fn song_json(song: &Song) -> Value {
+    let id = format!("{ID_PREFIX}{}", song.video_id);
     json!({
         "id": id,
         "parent": "",
@@ -477,7 +478,12 @@ async fn resolve(
         Ok(output) if output.status.success() => output,
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            let reason = stderr.trim().lines().next().unwrap_or("exit != 0").to_string();
+            let reason = stderr
+                .trim()
+                .lines()
+                .next()
+                .unwrap_or("exit != 0")
+                .to_string();
             if cookies.is_empty() {
                 return Err(anyhow!("yt-dlp failed: {}", stderr.trim()));
             }
@@ -590,7 +596,8 @@ async fn run_ytdlp(
         .map_err(|error| anyhow!("cannot run {}: {error}", config.ytdlp_path))
 }
 
-async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {    let path =
+async fn write_cookie_file(cookies: &[Cookie]) -> Result<PathBuf> {
+    let path =
         std::env::temp_dir().join(format!("rustream-ytm-{}.txt", crate::auth::random_hex(12)));
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true).create_new(true).mode(0o600);

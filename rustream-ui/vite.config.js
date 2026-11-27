@@ -5,7 +5,7 @@ import { defineConfig } from 'vite'
 const target = process.env.RUSTREAM_API || 'http://127.0.0.1:4533'
 
 export default defineConfig({
-  base: '/static/',
+  base: './',
   build: {
     outDir: '../static',
     emptyOutDir: true

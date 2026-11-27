@@ -10,6 +10,13 @@ export class ApiError extends Error {
   }
 }
 
+// Понятное сообщение, когда запрос уходит на статический хостинг без API.
+function httpMessage(status) {
+  if (status === 404) return 'Сервер API не найден. Это статическое превью — запустите rustream, чтобы войти.';
+  if (status >= 501 && status <= 504) return 'Сервер API недоступен. Это статическое превью — запустите rustream, чтобы войти.';
+  return `HTTP ${status}`;
+}
+
 function buildUrl(method, params = {}) {
   const search = new URLSearchParams({ v: API_VERSION, c: CLIENT, f: 'json', ...params });
   return `/rest/${method}.view?${search.toString()}`;
@@ -21,7 +28,7 @@ export async function api(method, params = {}) {
     throw new ApiError('Требуется вход в аккаунт', 401);
   }
   if (!response.ok) {
-    throw new ApiError(`HTTP ${response.status}`, response.status);
+    throw new ApiError(httpMessage(response.status), response.status);
   }
   const data = await response.json();
   const payload = data['subsonic-response'];
@@ -47,7 +54,7 @@ async function jsonFetch(path, options = {}) {
     data = null;
   }
   if (!response.ok) {
-    const fallback = response.status === 401 ? 'Требуется вход в аккаунт' : `HTTP ${response.status}`;
+    const fallback = response.status === 401 ? 'Требуется вход в аккаунт' : httpMessage(response.status);
     throw new ApiError(data?.error || fallback, response.status, data?.code || '');
   }
   return data;
