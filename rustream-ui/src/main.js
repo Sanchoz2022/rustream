@@ -159,6 +159,7 @@ root.innerHTML = `
     <div class="pb-right">
       <div class="pb-quality" id="pb-quality" title="Параметры текущего потока">
         <span class="quality-chip" id="quality-format">—</span>
+        <span class="quality-chip ytm-chip" id="pb-source" hidden title="Источник: YouTube Music">YouTube</span>
         <span class="quality-text" id="quality-detail"></span>
       </div>
       <button class="icon-btn" id="lyrics-btn" data-action="open-lyrics" title="Текст песни">${icon('lyrics')}</button>
@@ -406,8 +407,12 @@ function plural(n, one, few, many) {
 }
 
 /** Метка источника: YouTube-треки видно сразу, локальные — по формату. */
+function isYtmTrack(track) {
+  return track?.source === 'ytm' || String(track?.id || '').startsWith('ytm-');
+}
+
 function sourceBadge(track) {
-  if (track?.source === 'ytm') {
+  if (isYtmTrack(track)) {
     return `<span class="track-badge ytm" title="Источник: YouTube Music">YT</span>`;
   }
   return `<span class="track-badge">${esc((track?.suffix || 'flac').toUpperCase())}</span>`;
@@ -1541,6 +1546,7 @@ function renderNowPlaying() {
       <p class="muted">${esc(track?.album || '')}${track?.year ? ` · ${track.year}` : ''}</p>
       <div class="np-chips" id="np-chips">
         ${track ? `
+          ${isYtmTrack(track) ? `<span class="chip ytm-chip" title="Источник: YouTube Music">YouTube</span>` : ''}
           <span class="chip">${(track.suffix || 'flac').toUpperCase()}</span>
           <span class="chip">${track.bitRate ? `${track.bitRate} kbps` : 'lossless'}</span>
           <span class="chip" id="np-buffer">буфер 0:00</span>
@@ -1709,6 +1715,7 @@ function renderQueuePanel(panel) {
                 <span class="queue-drag-handle">${icon('menu')}</span>
                 <span class="queue-cover">${coverHtml(track.coverArt || track.albumId, { size: 80 })}</span>
                 <span class="queue-main"><strong>${esc(track.title)}</strong><small>${esc(track.artist || '')}</small></span>
+                ${sourceBadge(track)}
                 <span class="queue-time">${formatTime(track.duration)}</span>
               </button>`,
             )
@@ -1767,6 +1774,10 @@ function updateTrackUi() {
     $('.pb-cover').classList.remove('loaded');
   }
   qualityFormat.textContent = (track.suffix || 'flac').toUpperCase();
+  const sourceChip = $('#pb-source');
+  if (sourceChip) {
+    sourceChip.hidden = !isYtmTrack(track);
+  }
   qualityDetail.textContent = [
     track.bitRate ? `${track.bitRate} kbps` : null,
     track.size ? formatBytes(track.size) : null,
@@ -2342,6 +2353,19 @@ function settingsBody(users) {
         <h4>${icon('radio')} Скробблинг</h4>
         <p class="muted small">История и статистика пишутся локально всегда. Внешние сервисы получают прослушивания только после подключения.</p>
         <div class="settings-sub">
+          <h5>Что отправлять</h5>
+          <label class="switch">
+            <input type="checkbox" id="settings-scrobble-enabled" ${settings.scrobbleEnabled === false ? '' : 'checked'} />
+            <span>Отправлять прослушивания в Last.fm и ListenBrainz</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="settings-scrobble-ytm" ${settings.scrobbleYtm === false ? '' : 'checked'} ${settings.scrobbleEnabled === false ? 'disabled' : ''} />
+            <span>Включая треки, которые играют с YouTube</span>
+          </label>
+          <p class="muted small">Локальная история и статистика ведутся всегда; эти галочки влияют только на внешние сервисы.</p>
+          <button class="btn tonal" data-settings-action="save-scrobble-prefs">${icon('check')} Сохранить настройки скробблинга</button>
+        </div>
+        <div class="settings-sub">
           <h5>ListenBrainz — проще всего</h5>
           <p class="muted small">Бесплатно, без модерации и ключей приложения: нужен только личный токен.</p>
           <ol class="steps">
@@ -2481,6 +2505,11 @@ async function openSettings() {
         }
       });
 
+      $('#settings-scrobble-enabled', modal)?.addEventListener('change', (event) => {
+        const ytmInput = $('#settings-scrobble-ytm', modal);
+        if (ytmInput) ytmInput.disabled = !event.target.checked;
+      });
+
       $('#settings-password-form', modal)?.addEventListener('submit', async (event) => {
         event.preventDefault();
         try {
@@ -2517,6 +2546,21 @@ async function openSettings() {
         const button = event.target.closest('[data-settings-action]');
         if (!button) return;
         const action = button.dataset.settingsAction;
+
+        if (action === 'save-scrobble-prefs') {
+          const enabled = $('#settings-scrobble-enabled', modal).checked;
+          const ytm = $('#settings-scrobble-ytm', modal).checked;
+          try {
+            await api.saveScrobbling({ scrobbleEnabled: enabled, scrobbleYtm: ytm });
+            state.meSettings = { ...(state.meSettings || {}), scrobbleEnabled: enabled, scrobbleYtm: ytm };
+            const ytmInput = $('#settings-scrobble-ytm', modal);
+            if (ytmInput) ytmInput.disabled = !enabled;
+            toast('Настройки скробблинга сохранены');
+          } catch (error) {
+            toast(error.message, 'error');
+          }
+          return;
+        }
 
         if (action === 'logout') {
           await api.logout().catch(() => {});
@@ -3031,6 +3075,10 @@ async function renderYtm(seq) {
             <h2>${icon('ytm')} Недавно из YouTube</h2>
             <p class="muted">Всё, что вы уже искали или слушали — можно вернуться без нового поиска</p>
           </div>
+          <div class="head-actions">
+            <button class="btn ghost" data-action="ytm-play-all" data-list="history">${icon('play')} Играть</button>
+            <button class="btn ghost" data-action="ytm-queue-all" data-list="history">${icon('queue')} В очередь</button>
+          </div>
         </div>
         <div id="ytm-history"></div>
       </section>
@@ -3040,6 +3088,10 @@ async function renderYtm(seq) {
           <div>
             <h2>${icon('heart')} Мои лайки</h2>
             <p class="muted">Треки, которым вы поставили лайк в YouTube Music</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn ghost" data-action="ytm-play-all" data-list="liked">${icon('play')} Играть</button>
+            <button class="btn ghost" data-action="ytm-queue-all" data-list="liked">${icon('queue')} В очередь</button>
           </div>
         </div>
         <div id="ytm-liked"></div>
@@ -3075,7 +3127,17 @@ async function renderYtm(seq) {
     state.ytmLists.search = tracks;
     results.hidden = false;
     results.innerHTML = tracks.length
-      ? `<div class="section-head"><h2>${icon('search')} Результаты</h2><span class="muted small">${tracks.length}</span></div>${ytmRow(tracks, 'search')}`
+      ? `<div class="section-head">
+          <div>
+            <h2>${icon('search')} Результаты</h2>
+            <p class="muted">Поток с YouTube — файл в вашу библиотеку не скачивается</p>
+          </div>
+          <div class="head-actions">
+            <span class="muted small">${tracks.length}</span>
+            <button class="btn ghost" data-action="ytm-play-all" data-list="search">${icon('play')} Играть</button>
+            <button class="btn ghost" data-action="ytm-queue-all" data-list="search">${icon('queue')} В очередь</button>
+          </div>
+        </div>${ytmRow(tracks, 'search')}`
       : `<div class="empty-inline">${esc(empty)}</div>`;
     $('#ytm-empty')?.setAttribute('hidden', '');
   };
@@ -3091,7 +3153,7 @@ async function renderYtm(seq) {
       show(tracks, 'Ничего не найдено');
     } catch (error) {
       if (handleAuthError(error)) return;
-      results.innerHTML = `<div class="empty-inline">${esc(error.message)}</div>`;
+      results.innerHTML = `<div class="empty-inline">${esc(error.message)} <button class="btn ghost" data-action="ytm-retry">${icon('refresh')} Повторить</button></div>`;
     }
   };
 
@@ -3163,6 +3225,22 @@ document.addEventListener('click', async (event) => {
     if (!list?.length) return;
     setLiveMode(false);
     await player.playTracks(list, index);
+    return;
+  }
+  if (action === 'ytm-play-all' || action === 'ytm-queue-all') {
+    const list = state.ytmLists?.[actionEl.dataset.list];
+    if (!list?.length) return toast('Список пуст', 'warn');
+    if (action === 'ytm-play-all') {
+      setLiveMode(false);
+      await player.playTracks(list, 0);
+    } else {
+      const added = player.enqueue(list);
+      toast(`В очередь добавлено: ${added}`);
+    }
+    return;
+  }
+  if (action === 'ytm-retry') {
+    $('#ytm-search-form')?.requestSubmit();
     return;
   }
   if (action === 'play-all') {

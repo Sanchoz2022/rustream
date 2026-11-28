@@ -50,6 +50,8 @@ pub struct UserRow {
     pub lastfm_token: Option<String>,
     pub listenbrainz_token: Option<String>,
     pub theme: Option<String>,
+    pub scrobble_enabled: i64,
+    pub scrobble_ytm: i64,
 }
 
 impl UserRow {
@@ -269,7 +271,8 @@ async fn insert_user(
 pub async fn get_user_by_username(pool: &SqlitePool, username: &str) -> Result<Option<UserRow>> {
     Ok(sqlx::query_as::<_, UserRow>(
         "SELECT user_id, username, password_hash, password_enc, display_name, is_admin,
-                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme
+                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme,
+                scrobble_enabled, scrobble_ytm
          FROM users WHERE username = ? COLLATE NOCASE",
     )
     .bind(username.trim())
@@ -280,7 +283,8 @@ pub async fn get_user_by_username(pool: &SqlitePool, username: &str) -> Result<O
 pub async fn get_user_by_id(pool: &SqlitePool, user_id: &str) -> Result<Option<UserRow>> {
     Ok(sqlx::query_as::<_, UserRow>(
         "SELECT user_id, username, password_hash, password_enc, display_name, is_admin,
-                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme
+                api_key, lastfm_username, lastfm_session_key, lastfm_token, listenbrainz_token, theme,
+                scrobble_enabled, scrobble_ytm
          FROM users WHERE user_id = ?",
     )
     .bind(user_id)
@@ -393,6 +397,30 @@ pub async fn set_scrobbling(
     .bind(user_id)
     .execute(pool)
     .await?;
+    Ok(())
+}
+
+/// Переключатели скробблинга: общий и для треков из YouTube.
+pub async fn set_scrobbling_prefs(
+    pool: &SqlitePool,
+    user_id: &str,
+    enabled: Option<bool>,
+    ytm: Option<bool>,
+) -> Result<()> {
+    if let Some(enabled) = enabled {
+        sqlx::query("UPDATE users SET scrobble_enabled = ? WHERE user_id = ?")
+            .bind(i64::from(enabled))
+            .bind(user_id)
+            .execute(pool)
+            .await?;
+    }
+    if let Some(ytm) = ytm {
+        sqlx::query("UPDATE users SET scrobble_ytm = ? WHERE user_id = ?")
+            .bind(i64::from(ytm))
+            .bind(user_id)
+            .execute(pool)
+            .await?;
+    }
     Ok(())
 }
 

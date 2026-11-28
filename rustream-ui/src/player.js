@@ -195,6 +195,15 @@ export class Player extends EventTarget {
     await this._load(this.queue[this.index], true);
   }
 
+  /** Добавить треки в конец очереди, не трогая текущее воспроизведение. */
+  enqueue(tracks) {
+    if (!tracks?.length) return 0;
+    this.queue.push(...tracks);
+    this._storeQueue();
+    this._emit('queue');
+    return tracks.length;
+  }
+
   async playAt(index) {
     if (index < 0 || index >= this.queue.length) return;
     this.index = index;

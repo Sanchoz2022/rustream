@@ -22,16 +22,13 @@ pub async fn payload(state: &Arc<RwLock<AppState>>, user: &AuthUser) -> Json<Val
         .await
         .ok()
         .flatten();
-    let (lastfm_username, lastfm_connected, listenbrainz_connected, api_key, theme) = match row {
-        Some(row) => (
-            row.lastfm_username.clone(),
-            row.lastfm_session_key.is_some(),
-            row.listenbrainz_token.is_some(),
-            row.api_key.clone(),
-            row.theme.clone(),
-        ),
-        None => (None, false, false, None, None),
-    };
+    let lastfm_username = row.as_ref().and_then(|r| r.lastfm_username.clone());
+    let lastfm_connected = row.as_ref().is_some_and(|r| r.lastfm_session_key.is_some());
+    let listenbrainz_connected = row.as_ref().is_some_and(|r| r.listenbrainz_token.is_some());
+    let api_key = row.as_ref().and_then(|r| r.api_key.clone());
+    let theme = row.as_ref().and_then(|r| r.theme.clone());
+    let scrobble_enabled = row.as_ref().is_none_or(|r| r.scrobble_enabled != 0);
+    let scrobble_ytm = row.as_ref().is_none_or(|r| r.scrobble_ytm != 0);
 
     Json(json!({
         "user": {
@@ -44,6 +41,8 @@ pub async fn payload(state: &Arc<RwLock<AppState>>, user: &AuthUser) -> Json<Val
             "lastfmUsername": lastfm_username,
             "lastfmConnected": lastfm_connected,
             "listenbrainzConnected": listenbrainz_connected,
+            "scrobbleEnabled": scrobble_enabled,
+            "scrobbleYtm": scrobble_ytm,
             "subsonicApiKey": api_key,
             "theme": theme.unwrap_or_else(|| "violet".to_string())
         }
@@ -213,6 +212,10 @@ pub struct ScrobblingRequest {
     lastfm_session_key: Option<String>,
     #[serde(default, alias = "listenbrainzToken")]
     listenbrainz_token: Option<String>,
+    #[serde(default, alias = "scrobbleEnabled")]
+    scrobble_enabled: Option<bool>,
+    #[serde(default, alias = "scrobbleYtm")]
+    scrobble_ytm: Option<bool>,
 }
 
 pub async fn api_update_scrobbling(
@@ -230,7 +233,19 @@ pub async fn api_update_scrobbling(
     )
     .await
     {
-        Ok(()) => Json(json!({ "status": "ok" })).into_response(),
+        Ok(()) => {
+            if let Err(error) = auth::set_scrobbling_prefs(
+                &db,
+                &user.user_id,
+                request.scrobble_enabled,
+                request.scrobble_ytm,
+            )
+            .await
+            {
+                return fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string());
+            }
+            Json(json!({ "status": "ok" })).into_response()
+        }
         Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }
 }

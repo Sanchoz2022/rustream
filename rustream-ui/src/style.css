@@ -959,6 +959,13 @@ h3 {
   margin: 0 2px;
 }
 
+.ytm-chip {
+  color: var(--on-secondary-container);
+  background: var(--secondary-container);
+  border-color: transparent;
+  font-weight: 600;
+}
+
 /* --- Search row (YouTube Music) ------------------------------------------- */
 
 .search-row {

@@ -25,6 +25,17 @@ struct PlayRow {
     duration_ms: i64,
 }
 
+/// Per-user switches that decide whether a play leaves the server.
+#[derive(Debug, sqlx::FromRow)]
+struct ScrobbleSettings {
+    lastfm_session_key: Option<String>,
+    listenbrainz_token: Option<String>,
+    #[allow(dead_code)]
+    lastfm_username: Option<String>,
+    scrobble_enabled: i64,
+    scrobble_ytm: i64,
+}
+
 /// Metadata for scrobbling. `ytm-` ids are looked up in the user's own
 /// YouTube Music cache, because they have no row in the local library.
 pub async fn track_info(db: &SqlitePool, user_id: &str, track_id: &str) -> Option<TrackInfo> {
@@ -134,14 +145,24 @@ pub async fn update_play(
         return Ok(());
     };
 
-    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
-        "SELECT lastfm_session_key, listenbrainz_token, lastfm_username FROM users WHERE user_id = ?",
+    let row: Option<ScrobbleSettings> = sqlx::query_as(
+        "SELECT lastfm_session_key, listenbrainz_token, lastfm_username, scrobble_enabled, scrobble_ytm \
+         FROM users WHERE user_id = ?",
     )
     .bind(user_id)
     .fetch_optional(db)
     .await?;
 
-    if let Some((lastfm_key, listenbrainz_token, _lastfm_username)) = row {
+    if let Some(settings) = row {
+        if !scrobbling_allowed(
+            settings.scrobble_enabled != 0,
+            settings.scrobble_ytm != 0,
+            &play.track_id,
+        ) {
+            return Ok(());
+        }
+        let lastfm_key = settings.lastfm_session_key;
+        let listenbrainz_token = settings.listenbrainz_token;
         let config = config.clone();
         let started_at = play.started_at;
         let track = track.clone();
@@ -353,4 +374,25 @@ fn urlencode(value: &str) -> String {
         }
     }
     out
+}
+
+/// Whether a finished play should be sent to Last.fm / ListenBrainz. Play
+/// history is recorded either way; this only gates the external services.
+pub fn scrobbling_allowed(enabled: bool, ytm_enabled: bool, track_id: &str) -> bool {
+    enabled && (ytm_enabled || !track_id.starts_with(crate::ytm::ID_PREFIX))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scrobbling_allowed;
+
+    #[test]
+    fn scrobbling_respects_per_user_options() {
+        assert!(scrobbling_allowed(true, true, "track-1"));
+        assert!(scrobbling_allowed(true, true, "ytm-9RfVp-GhKfs"));
+        assert!(scrobbling_allowed(true, false, "track-1"));
+        assert!(!scrobbling_allowed(true, false, "ytm-9RfVp-GhKfs"));
+        assert!(!scrobbling_allowed(false, true, "track-1"));
+        assert!(!scrobbling_allowed(false, true, "ytm-9RfVp-GhKfs"));
+    }
 }

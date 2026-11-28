@@ -222,10 +222,10 @@ export function changePassword(currentPassword, newPassword) {
   });
 }
 
-export function saveScrobbling({ lastfmUsername, lastfmSessionKey, listenbrainzToken }) {
+export function saveScrobbling({ lastfmUsername, lastfmSessionKey, listenbrainzToken, scrobbleEnabled, scrobbleYtm }) {
   return jsonFetch('/api/me/scrobbling', {
     method: 'PUT',
-    body: JSON.stringify({ lastfmUsername, lastfmSessionKey, listenbrainzToken }),
+    body: JSON.stringify({ lastfmUsername, lastfmSessionKey, listenbrainzToken, scrobbleEnabled, scrobbleYtm }),
   });
 }
 

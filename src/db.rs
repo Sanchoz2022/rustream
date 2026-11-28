@@ -239,6 +239,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         ("users", "ytm_cookies_enc", "TEXT"),
         ("users", "ytm_account", "TEXT"),
         ("users", "ytm_updated_at", "INTEGER"),
+        ("users", "scrobble_enabled", "INTEGER NOT NULL DEFAULT 1"),
+        ("users", "scrobble_ytm", "INTEGER NOT NULL DEFAULT 1"),
     ] {
         if !column_exists(pool, table, column).await? {
             let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition);
