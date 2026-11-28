@@ -4379,3 +4379,659 @@ html[data-density='large'] body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Material 3 — выразительный слой
+   --------------------------------------------------------------------------
+   Material 3 узнаётся по тональным поверхностям-контейнерам вместо резких
+   рамок, полностью круглым чипам и «плиткам» контента с крупными радиусами.
+   Этот слой перекрывает старые правила компонентов, не меняя разметку.
+   ========================================================================== */
+
+body {
+  font-family: 'Roboto', 'Roboto Flex', var(--font-sans);
+  letter-spacing: 0.01em;
+}
+
+/* --- Кнопки: filled / tonal / text, state layer ------------------------- */
+
+.btn {
+  height: 40px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.btn.primary:hover {
+  background: color-mix(in srgb, var(--primary) 90%, var(--on-primary));
+  box-shadow: var(--elev-1);
+}
+
+.btn.tonal {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+.btn.tonal:hover {
+  background: color-mix(in srgb, var(--secondary-container) 86%, var(--on-secondary-container));
+}
+
+.btn.glass {
+  border: 1px solid var(--outline);
+  border-radius: var(--shape-full);
+}
+
+.btn.glass:hover {
+  background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+
+.btn.ghost {
+  color: var(--on-surface-variant);
+  padding: 0 16px;
+}
+
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--on-surface) 10%, transparent);
+}
+
+/* --- Чипы и метки: полностью круглые ------------------------------------ */
+
+.chip,
+.status-chip,
+.chip-btn,
+.quality-chip,
+.track-badge,
+.track-badge.ytm {
+  border-radius: var(--shape-full);
+}
+
+.chip {
+  height: 32px;
+  padding: 0 14px;
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.chip-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-color: var(--outline);
+  color: var(--on-surface-variant);
+  font-size: 14px;
+}
+
+.chip-btn:hover {
+  background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+  color: var(--on-surface);
+}
+
+.chip-btn.active {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  border-color: transparent;
+}
+
+.status-chip {
+  height: 32px;
+  padding: 0 12px;
+  background: var(--surface-container-high);
+  font-size: 13px;
+}
+
+.status-chip.on {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+.track-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  letter-spacing: 0.02em;
+}
+
+.quality-chip {
+  padding: 2px 8px;
+  background: var(--surface-container-highest);
+}
+
+/* --- Навигация: индикатор активного пункта ------------------------------ */
+
+.nav-item {
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: var(--shape-full);
+}
+
+.nav-item:hover {
+  background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+
+.nav-item.active {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  font-weight: 500;
+}
+
+.nav-item.active .nav-label {
+  color: var(--on-secondary-container);
+}
+
+.nav-label {
+  font-size: 14px;
+}
+
+/* --- Поверхности: карточки и секции-контейнеры --------------------------- */
+
+.card-cover {
+  border-radius: var(--shape-md);
+  box-shadow: none;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.card-sub {
+  font-size: 13px;
+}
+
+.section.glass-card,
+.glass-card {
+  background: var(--surface-container-low);
+  border: 0;
+  border-radius: var(--shape-xl);
+  padding: clamp(16px, 2.4vw, 24px);
+}
+
+.mix-card {
+  border-radius: var(--shape-lg);
+  background: var(--surface-container-low);
+}
+
+.mix-card:hover {
+  background: var(--surface-container);
+}
+
+.stat-card {
+  border-radius: var(--shape-lg);
+  background: var(--surface-container-low);
+}
+
+/* --- Поля ввода: M3 filled field ---------------------------------------- */
+
+.searchbox {
+  height: 48px;
+  border-radius: var(--shape-full);
+  background: var(--surface-container-high);
+  border: 0;
+}
+
+.searchbox:focus-within {
+  background: var(--surface-container-highest);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.input,
+.select,
+textarea.input {
+  border-radius: var(--shape-md);
+  background: var(--surface-container-high);
+}
+
+.input:focus,
+.select:focus {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+/* --- Строки списков: M3 list item --------------------------------------- */
+
+.track-row {
+  height: 56px;
+  padding: 0 12px;
+  border-radius: var(--shape-md);
+}
+
+.track-row:hover {
+  background: color-mix(in srgb, var(--on-surface) 6%, transparent);
+}
+
+.track-row.playing,
+.track-row[data-playing='true'] {
+  background: var(--primary-container);
+}
+
+.track-title {
+  font-size: 14px;
+}
+
+.track-sub {
+  font-size: 12px;
+}
+
+/* --- Ползунки: M3 slider ------------------------------------------------- */
+
+.volume input[type='range']::-webkit-slider-runnable-track,
+.volume input[type='range']::-moz-range-track {
+  height: 4px;
+  background: var(--surface-container-highest);
+}
+
+.volume input[type='range']::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border: 0;
+  background: var(--primary);
+  box-shadow: var(--elev-1);
+}
+
+.volume input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  background: var(--primary);
+}
+
+.seek-fill,
+.np-seek-fill {
+  height: 6px;
+}
+
+.seek input[type='range']::-webkit-slider-thumb,
+.np-seek-bar input[type='range']::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -5px;
+  border: 0;
+}
+
+/* --- Диалоги и панели: крупные радиусы M3 ------------------------------- */
+
+.modal-card,
+.dialog,
+.np-panel,
+.sheet {
+  border-radius: var(--shape-xl);
+}
+
+.player {
+  background: var(--surface-container);
+}
+
+.pb-seek .time,
+.pb-artist {
+  font-size: 12px;
+}
+
+/* --- Содержимое страниц: крупная выразительная типографика -------------- */
+
+h1 {
+  font-size: clamp(24px, 3.4vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: clamp(18px, 2.4vw, 22px);
+  font-weight: 500;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Вкладка YouTube Music — структура YouTube Music
+   ========================================================================== */
+
+.ytm-head {
+  align-items: center;
+}
+
+.ytm-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.ytm-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ytm-search-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 20px;
+  border-radius: var(--shape-full);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.ytm-search-field:focus-within {
+  background: var(--surface-container-highest);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.ytm-search-field .icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.ytm-search-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: none;
+  border: 0;
+  color: var(--on-surface);
+  font-size: 16px;
+}
+
+.ytm-search-field input::placeholder {
+  color: var(--on-surface-variant);
+}
+
+.ytm-search-submit {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--shape-full);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.ytm-search-submit:hover {
+  background: color-mix(in srgb, var(--primary-container) 86%, var(--on-primary-container));
+  color: var(--on-primary-container);
+}
+
+.ytm-chips {
+  margin-bottom: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.ytm-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.ytm-chips .chip-btn {
+  flex: 0 0 auto;
+}
+
+.shelf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.shelf-head h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shelf-head .muted {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.ytm-shelf-section {
+  margin-bottom: 36px;
+}
+
+.ytm-shelf {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(148px, 176px);
+  gap: clamp(10px, 1.4vw, 16px);
+  overflow-x: auto;
+  padding: 2px 2px 12px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.ytm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--shape-lg);
+  background: var(--surface-container-low);
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+
+.ytm-card:hover,
+.ytm-card:focus-visible {
+  background: var(--surface-container);
+}
+
+.ytm-card-art {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--shape-md);
+  overflow: hidden;
+  background: var(--surface-container-high);
+}
+
+.ytm-card-art,
+.ytm-row-art {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff' fill-opacity='0.28'%3E%3Cpath d='M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 42%;
+}
+
+.ytm-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ytm-card-play {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  box-shadow: var(--elev-2);
+  opacity: 0;
+  transform: translateY(6px) scale(0.92);
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+.ytm-card:hover .ytm-card-play,
+.ytm-card:focus-visible .ytm-card-play {
+  opacity: 1;
+  transform: none;
+}
+
+.ytm-card-play .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.ytm-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.ytm-card-sub {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-source-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--shape-full);
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.ytm-card-art .ytm-source-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.ytm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ytm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 0 8px;
+  border-radius: var(--shape-md);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+
+.ytm-row:hover,
+.ytm-row:focus-visible {
+  background: var(--surface-container-high);
+}
+
+.ytm-row-index {
+  width: 22px;
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 13px;
+  color: var(--on-surface-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.ytm-row-art {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: var(--shape-sm);
+  overflow: hidden;
+  background: var(--surface-container-high);
+}
+
+.ytm-row-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ytm-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ytm-row-title {
+  font-size: 14px;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-row-sub {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-row-time {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--shape-full);
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .ytm-row-index,
+  .ytm-row-time,
+  .ytm-row .ytm-source-badge {
+    display: none;
+  }
+
+  .ytm-row {
+    height: 60px;
+    gap: 10px;
+  }
+
+  .ytm-shelf {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .ytm-search-field {
+    height: 48px;
+  }
+
+  .ytm-search-submit {
+    width: 48px;
+    height: 48px;
+  }
+}

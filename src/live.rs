@@ -4,6 +4,7 @@ use sqlx::SqlitePool;
 use std::collections::{HashMap, HashSet};
 
 use crate::subsonic::song_json;
+use crate::ytm::track_json as ytm_track_json;
 
 type SongRow = (
     String,
@@ -115,8 +116,27 @@ async fn top_artists(db: &SqlitePool, user_id: &str) -> HashMap<String, i64> {
     rows.into_iter().collect()
 }
 
+async fn ytm_candidates(
+    db: &SqlitePool,
+    user_id: &str,
+    limit: i64,
+) -> Vec<(String, String, String, String, i64)> {
+    sqlx::query_as(
+        "SELECT video_id, title, artist, album, duration_ms
+         FROM ytm_tracks WHERE user_id = ?
+         ORDER BY last_used_at DESC LIMIT ?",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+}
+
 /// Personalised radio: favourites, favourite artists, then the rest of the
-/// library, with recently played tracks pushed to the back.
+/// library, with recently played tracks pushed to the back. Tracks known from
+/// the user's YouTube Music profile take part too, so the stream is not
+/// limited to what has been downloaded locally.
 pub async fn live_queue(db: &SqlitePool, user_id: &str, count: i64) -> Result<Vec<Value>> {
     let count = count.clamp(1, 100) as usize;
     let star_map = starred_set(db, user_id).await;
@@ -165,15 +185,63 @@ pub async fn live_queue(db: &SqlitePool, user_id: &str, count: i64) -> Result<Ve
     }
 
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored.truncate(count);
 
-    Ok(scored
+    // YouTube Music: tracks the profile already knows, mixed in at up to a
+    // third of the stream so Live is not limited to what is stored locally.
+    let mut ytm_scored: Vec<(f64, Value)> = Vec::new();
+    for (index, (video_id, title, artist, album, duration_ms)) in ytm_candidates(db, user_id, 200)
+        .await
+        .into_iter()
+        .enumerate()
+    {
+        let id = format!("{}{video_id}", crate::ytm::ID_PREFIX);
+        if disliked.contains(&id) {
+            continue;
+        }
+        // Fresh discoveries first, very recent listens pushed back.
+        let mut score: f64 = rand::random::<f64>() * 2.6 + 0.6;
+        if index < 10 {
+            score -= 4.0;
+        }
+        ytm_scored.push((
+            score,
+            ytm_track_json(&video_id, &title, &artist, &album, duration_ms),
+        ));
+    }
+    ytm_scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let ytm_cap = (count / 3).max(3).min(ytm_scored.len());
+    let ytm_pick: Vec<Value> = ytm_scored
+        .into_iter()
+        .take(ytm_cap)
+        .map(|(_, track)| track)
+        .collect();
+    scored.truncate((count).saturating_sub(ytm_pick.len()));
+
+    let mut out: Vec<Value> = scored
         .into_iter()
         .map(|(_, row)| {
             let starred = star_map.contains(&row.0);
             row_to_json(row, starred)
         })
-        .collect())
+        .collect();
+
+    if !ytm_pick.is_empty() {
+        let mut ytm_iter = ytm_pick.into_iter();
+        let mut merged = Vec::with_capacity(out.len());
+        for (index, track) in out.drain(..).enumerate() {
+            merged.push(track);
+            if index % 2 == 1 {
+                if let Some(ytm_track) = ytm_iter.next() {
+                    merged.push(ytm_track);
+                }
+            }
+        }
+        merged.extend(ytm_iter);
+        out = merged;
+    }
+
+    Ok(out)
 }
 
 pub async fn mixes(db: &SqlitePool, user_id: &str) -> Result<Value> {
@@ -398,4 +466,98 @@ pub async fn user_stats(db: &SqlitePool, user_id: &str) -> Result<Value> {
             })
             .collect::<Vec<_>>()
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn seed_local(db: &SqlitePool, count: i64) {
+        sqlx::query("INSERT INTO artists (artist_id, name, created_at) VALUES ('a1', 'Local', 0)")
+            .execute(db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO albums (album_id, artist_id, title, track_count, duration_ms, created_at)
+             VALUES ('al1', 'a1', 'Album', ?1, 600000, 0)",
+        )
+        .bind(count)
+        .execute(db)
+        .await
+        .unwrap();
+        for index in 0..count {
+            sqlx::query(
+                "INSERT INTO tracks
+                     (track_id, album_id, artist_id, title, track_number, duration_ms,
+                      file_path, file_size, created_at)
+                 VALUES (?1, 'al1', 'a1', ?2, ?3, 180000, ?4, 1000, 0)",
+            )
+            .bind(format!("t{index}"))
+            .bind(format!("Local {index}"))
+            .bind(index)
+            .bind(format!("/music/{index}.flac"))
+            .execute(db)
+            .await
+            .unwrap();
+        }
+    }
+
+    async fn seed_ytm(db: &SqlitePool, user_id: &str, count: i64) {
+        for index in 0..count {
+            sqlx::query(
+                "INSERT INTO ytm_tracks
+                     (user_id, video_id, title, artist, album, duration_ms,
+                      thumbnail, created_at, last_used_at)
+                 VALUES (?1, ?2, ?3, 'YT artist', 'YT album', 200000, '', 0, ?4)",
+            )
+            .bind(user_id)
+            .bind(format!("vid{index}"))
+            .bind(format!("YT {index}"))
+            .bind(index)
+            .execute(db)
+            .await
+            .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn live_queue_mixes_youtube_tracks_with_the_library() {
+        let db = crate::db::test_pool().await;
+        seed_local(&db, 6).await;
+        seed_ytm(&db, "u1", 4).await;
+
+        let queue = live_queue(&db, "u1", 9).await.unwrap();
+        let ids: Vec<&str> = queue
+            .iter()
+            .filter_map(|track| track.get("id").and_then(Value::as_str))
+            .collect();
+
+        assert_eq!(ids.len(), 9);
+        assert!(
+            ids.iter().any(|id| id.starts_with(crate::ytm::ID_PREFIX)),
+            "YouTube tracks missing from Live: {ids:?}"
+        );
+        assert!(ids.iter().any(|id| id.starts_with('t')), "local: {ids:?}");
+
+        let mut unique = ids.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), ids.len(), "duplicates: {ids:?}");
+    }
+
+    #[tokio::test]
+    async fn live_queue_works_with_youtube_tracks_only() {
+        let db = crate::db::test_pool().await;
+        seed_ytm(&db, "u2", 3).await;
+
+        let queue = live_queue(&db, "u2", 5).await.unwrap();
+        assert_eq!(queue.len(), 3);
+        for track in &queue {
+            assert!(track["id"]
+                .as_str()
+                .unwrap()
+                .starts_with(crate::ytm::ID_PREFIX));
+            assert_eq!(track["source"], "ytm");
+        }
+    }
 }

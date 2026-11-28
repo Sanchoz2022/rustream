@@ -3026,72 +3026,114 @@ async function renderYtm(seq) {
 
   state.ytmLists = state.ytmLists || { history: [], liked: [], search: [] };
 
-  const ytmRow = (tracks, list) =>
-    trackList(tracks, { showCover: true, rowAction: 'play-ytm-row', rowList: list });
+  const ytmCover = (track) =>
+    `<img src="${api.coverUrl(track.coverArt || track.id, 320)}" alt="" loading="lazy" decoding="async" />`;
+
+  // Полка карточек — как в YouTube Music: обложка, название, исполнитель.
+  const ytmShelf = (tracks, list) => `
+    <div class="ytm-shelf">
+      ${tracks
+        .map(
+          (track, index) => `
+        <article class="ytm-card" data-action="play-ytm-row" data-list="${list}" data-index="${index}" tabindex="0" role="button" aria-label="Играть: ${esc(track.title)}">
+          <div class="ytm-card-art">
+            ${ytmCover(track)}
+            <span class="ytm-source-badge">YT</span>
+            <span class="ytm-card-play">${icon('play')}</span>
+          </div>
+          <p class="ytm-card-title">${esc(track.title)}</p>
+          <p class="ytm-card-sub">${esc(track.artist || '')}</p>
+        </article>`,
+        )
+        .join('')}
+    </div>`;
+
+  // Результаты — строками, как в ленте YouTube Music.
+  const ytmRows = (tracks, list) => `
+    <div class="ytm-rows">
+      ${tracks
+        .map(
+          (track, index) => `
+        <div class="ytm-row" data-action="play-ytm-row" data-list="${list}" data-index="${index}" tabindex="0" role="button">
+          <span class="ytm-row-index">${index + 1}</span>
+          <span class="ytm-row-art">${ytmCover(track)}</span>
+          <span class="ytm-row-text">
+            <span class="ytm-row-title">${esc(track.title)}</span>
+            <span class="ytm-row-sub">${esc([track.artist, track.album].filter(Boolean).join(' · '))}</span>
+          </span>
+          <span class="ytm-source-badge">YT</span>
+          <span class="ytm-row-time">${formatTime(track.duration)}</span>
+          <button class="icon-btn" data-action="ytm-queue-one" data-list="${list}" data-index="${index}" title="В очередь">${icon('queue')}</button>
+        </div>`,
+        )
+        .join('')}
+    </div>`;
 
   $('#view').innerHTML = `
     <div class="page ytm-page">
-      <header class="page-head">
+      <header class="page-head ytm-head">
         <div>
           <span class="eyebrow">Источник</span>
           <h1>YouTube Music</h1>
           <p class="muted">${esc(status.account?.name || 'Подключено')}${status.account?.handle ? ` · ${esc(status.account.handle)}` : ''}</p>
         </div>
         <div class="head-actions">
-          <button class="btn glass" data-action="ytm-liked">${icon('heart')} Обновить лайки</button>
+          <button class="btn tonal" data-action="ytm-liked">${icon('heart')} Обновить лайки</button>
         </div>
       </header>
 
-      <form id="ytm-search-form" class="search-row">
-        <label class="searchbox glass">
-          ${icon('search')}
-          <input id="ytm-search-input" type="search" placeholder="Треки, артисты, альбомы…" enterkeyhint="search" autocomplete="off" />
-        </label>
-        <button class="btn primary" type="submit">${icon('search')} Искать</button>
-      </form>
+      <div class="ytm-toolbar">
+        <form id="ytm-search-form" class="ytm-searchbar">
+          <label class="ytm-search-field">
+            ${icon('search')}
+            <input id="ytm-search-input" type="search" placeholder="Поиск треков, артистов, альбомов" enterkeyhint="search" autocomplete="off" />
+          </label>
+          <button class="icon-btn ytm-search-submit" type="submit" title="Искать">${icon('search')}</button>
+        </form>
 
-      <div class="chip-row">
-        ${[
-          ['Новинки', 'новинки музыка 2026'],
-          ['Хиты', 'популярные песни'],
-          ['Русское', 'русская музыка'],
-          ['Электроника', 'electronic mix'],
-          ['Лоу-фай', 'lofi beats'],
-          ['Рок', 'rock classics'],
-          ['Джаз', 'jazz standards'],
-        ]
-          .map(
-            ([label, query]) =>
-              `<button class="chip-btn" data-action="ytm-preset" data-query="${esc(query)}">${label}</button>`,
-          )
-          .join('')}
+        <div class="chip-row ytm-chips">
+          ${[
+            ['Новинки', 'новинки музыка 2026'],
+            ['Хиты', 'популярные песни'],
+            ['Русское', 'русская музыка'],
+            ['Электроника', 'electronic mix'],
+            ['Лоу-фай', 'lofi beats'],
+            ['Рок', 'rock classics'],
+            ['Джаз', 'jazz standards'],
+          ]
+            .map(
+              ([label, query]) =>
+                `<button class="chip-btn" data-action="ytm-preset" data-query="${esc(query)}">${label}</button>`,
+            )
+            .join('')}
+        </div>
       </div>
 
       <section class="section" id="ytm-results" hidden></section>
 
-      <section class="section" id="ytm-history-section" hidden>
-        <div class="section-head">
+      <section class="section ytm-shelf-section" id="ytm-history-section" hidden>
+        <div class="shelf-head">
           <div>
-            <h2>${icon('ytm')} Недавно из YouTube</h2>
-            <p class="muted">Всё, что вы уже искали или слушали — можно вернуться без нового поиска</p>
+            <h2>Недавно слушали</h2>
+            <p class="muted">Вернитесь к тому, что уже искали или слушали</p>
           </div>
           <div class="head-actions">
-            <button class="btn ghost" data-action="ytm-play-all" data-list="history">${icon('play')} Играть</button>
-            <button class="btn ghost" data-action="ytm-queue-all" data-list="history">${icon('queue')} В очередь</button>
+            <button class="icon-btn" data-action="ytm-queue-all" data-list="history" title="В очередь">${icon('queue')}</button>
+            <button class="btn tonal" data-action="ytm-play-all" data-list="history">${icon('play')} Слушать все</button>
           </div>
         </div>
         <div id="ytm-history"></div>
       </section>
 
-      <section class="section" id="ytm-liked-section" hidden>
-        <div class="section-head">
+      <section class="section ytm-shelf-section" id="ytm-liked-section" hidden>
+        <div class="shelf-head">
           <div>
-            <h2>${icon('heart')} Мои лайки</h2>
+            <h2>С YouTube Music</h2>
             <p class="muted">Треки, которым вы поставили лайк в YouTube Music</p>
           </div>
           <div class="head-actions">
-            <button class="btn ghost" data-action="ytm-play-all" data-list="liked">${icon('play')} Играть</button>
-            <button class="btn ghost" data-action="ytm-queue-all" data-list="liked">${icon('queue')} В очередь</button>
+            <button class="icon-btn" data-action="ytm-queue-all" data-list="liked" title="В очередь">${icon('queue')}</button>
+            <button class="btn tonal" data-action="ytm-play-all" data-list="liked">${icon('play')} Слушать все</button>
           </div>
         </div>
         <div id="ytm-liked"></div>
@@ -3120,24 +3162,24 @@ async function renderYtm(seq) {
       return;
     }
     section.hidden = false;
-    host.innerHTML = ytmRow(tracks, list);
+    host.innerHTML = ytmShelf(tracks, list);
   };
 
   const show = (tracks, empty) => {
     state.ytmLists.search = tracks;
     results.hidden = false;
     results.innerHTML = tracks.length
-      ? `<div class="section-head">
+      ? `<div class="shelf-head">
           <div>
-            <h2>${icon('search')} Результаты</h2>
+            <h2>Результаты поиска</h2>
             <p class="muted">Поток с YouTube — файл в вашу библиотеку не скачивается</p>
           </div>
           <div class="head-actions">
-            <span class="muted small">${tracks.length}</span>
-            <button class="btn ghost" data-action="ytm-play-all" data-list="search">${icon('play')} Играть</button>
-            <button class="btn ghost" data-action="ytm-queue-all" data-list="search">${icon('queue')} В очередь</button>
+            <span class="count-pill">${tracks.length} ${plural(tracks.length, 'трек', 'трека', 'треков')}</span>
+            <button class="icon-btn" data-action="ytm-queue-all" data-list="search" title="В очередь">${icon('queue')}</button>
+            <button class="btn tonal" data-action="ytm-play-all" data-list="search">${icon('play')} Слушать все</button>
           </div>
-        </div>${ytmRow(tracks, 'search')}`
+        </div>${ytmRows(tracks, 'search')}`
       : `<div class="empty-inline">${esc(empty)}</div>`;
     $('#ytm-empty')?.setAttribute('hidden', '');
   };
@@ -3225,6 +3267,14 @@ document.addEventListener('click', async (event) => {
     if (!list?.length) return;
     setLiveMode(false);
     await player.playTracks(list, index);
+    return;
+  }
+  if (action === 'ytm-queue-one') {
+    const list = state.ytmLists?.[actionEl.dataset.list];
+    const track = list?.[Number(actionEl.dataset.index)];
+    if (!track) return;
+    player.enqueue([track]);
+    toast(`«${track.title}» в очереди`);
     return;
   }
   if (action === 'ytm-play-all' || action === 'ytm-queue-all') {
@@ -3556,6 +3606,34 @@ $('#seek').addEventListener('input', (event) => {
 $('#volume').addEventListener('input', (event) => {
   player.setVolume(Number(event.target.value));
   updateVolumeUi();
+});
+
+// Колесо мыши над регулятором громкости — как в десктопных плеерах.
+// Делегирование на document, потому что панель «сейчас играет» перерисовывается.
+document.addEventListener(
+  'wheel',
+  (event) => {
+    const zone = event.target.closest?.('.volume, .np-volume');
+    if (!zone || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    const step = event.deltaY < 0 ? 5 : -5;
+    const next = Math.min(100, Math.max(0, player.volumePercent + step));
+    if (next === player.volumePercent) return;
+    player.setVolume(next);
+    const slider = zone.querySelector('input[type="range"]');
+    if (slider) slider.value = String(next);
+    updateVolumeUi();
+  },
+  { passive: false },
+);
+
+// Карточки и строки YouTube Music открываются с клавиатуры.
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const zone = event.target.closest?.('.ytm-card, .ytm-row');
+  if (!zone) return;
+  event.preventDefault();
+  zone.click();
 });
 
 // Keyboard

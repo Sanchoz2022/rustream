@@ -292,6 +292,33 @@ pub async fn history(db: &SqlitePool, user_id: &str, limit: usize) -> Result<Vec
         .collect())
 }
 
+/// Subsonic-shaped track for a known YouTube video, shared by search, history
+/// and the Live queue so every client sees the same fields.
+pub fn track_json(
+    video_id: &str,
+    title: &str,
+    artist: &str,
+    album: &str,
+    duration_ms: i64,
+) -> Value {
+    let id = format!("{ID_PREFIX}{video_id}");
+    json!({
+        "id": id,
+        "parent": "",
+        "isDir": false,
+        "title": title,
+        "album": album,
+        "artist": artist,
+        "coverArt": id,
+        "duration": duration_ms / 1000,
+        "suffix": "m4a",
+        "contentType": "audio/mp4",
+        "isVideo": false,
+        "type": "music",
+        "source": "ytm",
+    })
+}
+
 fn song_json(song: &Song) -> Value {
     let id = format!("{ID_PREFIX}{}", song.video_id);
     json!({
